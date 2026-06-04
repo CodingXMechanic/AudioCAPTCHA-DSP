@@ -1,0 +1,9 @@
+experiment:
+  id: "exp_01"
+  name: "baseline"
+  description: "Clean audio baseline WER across model sizes"
+  dataset: "librispeech_clean"
+  asr_model_sizes: ["tiny", "base", "small"]
+  transforms: []
+  num_samples: 100
+  seed: 42

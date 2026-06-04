@@ -1,0 +1,12 @@
+experiment:
+  id: "exp_03"
+  name: "spectral_masking"
+  description: "Sensitivity to psychoacoustic spectral masking"
+  dataset: "librispeech_clean"
+  asr_model_size: "base"
+  transform: "psychoacoustic.masking"
+  parameters:
+    masker_level_db: [0, 10, 20, 30, 40]
+    bandwidth_bark: [1, 2, 4]
+  num_samples: 50
+  seed: 42

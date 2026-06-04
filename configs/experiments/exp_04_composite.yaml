@@ -1,0 +1,12 @@
+experiment:
+  id: "exp_04"
+  name: "composite_transforms"
+  description: "Combined temporal jitter and spectral masking"
+  dataset: "librispeech_clean"
+  asr_model_size: "base"
+  transform: "composite.temporal_plus_spectral"
+  parameters:
+    jitter_amplitude_ms: [10, 30]
+    masker_level_db: [10, 30]
+  num_samples: 50
+  seed: 42

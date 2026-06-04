@@ -1,0 +1,12 @@
+experiment:
+  id: "exp_05"
+  name: "rational_run"
+  description: "Single temporal transform — rational jitter sweep over amplitude and frequency"
+  dataset: "synthetic"
+  transform: "temporal.jitter"
+  parameters:
+    amplitude_ms: [0, 5, 10, 20, 30, 50]
+    frequency_hz: [1, 5, 10, 20]
+  num_samples: 8
+  seed: 42
+  output_dir: "results"

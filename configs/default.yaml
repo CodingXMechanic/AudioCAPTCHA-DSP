@@ -1,0 +1,36 @@
+project:
+  name: "AudioCAPTCHA-DSP"
+  version: "0.1.0"
+
+audio:
+  sample_rate: 16000
+  bit_depth: 16
+  channels: 1
+  format: "wav"
+
+paths:
+  data_raw: "data/raw"
+  data_processed: "data/processed"
+  data_references: "data/references"
+  results_figures: "results/figures"
+  results_tables: "results/tables"
+  results_logs: "results/logs"
+
+asr:
+  model_size: "tiny"
+  language: "en"
+  device: "cpu"
+
+transforms:
+  temporal:
+    enabled: true
+    jitter_range_ms: [0, 50]
+    resample_factors: [0.95, 1.05]
+  spectral:
+    enabled: true
+    masker_level_db: 0
+    notch_freq_hz: []
+psychoacoustics:
+  bark_scale: "traunmuller"
+  threshold_model: "iso226"
+  masking_model: "simultaneous"

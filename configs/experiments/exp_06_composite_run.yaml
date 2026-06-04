@@ -1,0 +1,17 @@
+experiment:
+  id: "exp_06"
+  name: "composite_run"
+  description: "Composite temporal jitter + spectral masking transform chain"
+  dataset: "synthetic"
+  transforms:
+    - type: "temporal.jitter"
+      parameters:
+        amplitude_ms: [10, 30]
+        frequency_hz: [5, 15]
+    - type: "spectral.masking"
+      parameters:
+        masker_level_db: [10, 30]
+        bandwidth_bark: [2]
+  num_samples: 8
+  seed: 42
+  output_dir: "results"

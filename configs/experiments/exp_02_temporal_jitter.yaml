@@ -1,0 +1,12 @@
+experiment:
+  id: "exp_02"
+  name: "temporal_jitter"
+  description: "Sensitivity to temporal jitter"
+  dataset: "librispeech_clean"
+  asr_model_size: "base"
+  transform: "temporal.jitter"
+  parameters:
+    amplitude_ms: [0, 5, 10, 20, 30, 50]
+    frequency_hz: [1, 5, 10, 20]
+  num_samples: 50
+  seed: 42

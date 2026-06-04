@@ -1,0 +1,12 @@
+psychoacoustic:
+  masking:
+    enabled: true
+    type: "simultaneous"
+    masker_levels_db: [0, 10, 20, 30, 40]
+  notch:
+    enabled: false
+    frequencies_hz: [1000, 2000, 4000]
+    bandwidth_hz: 100
+  warping:
+    enabled: false
+    alpha: 0.0

@@ -1,0 +1,8 @@
+composite:
+  name: "temporal_plus_spectral"
+  stages:
+    - type: "temporal.jitter"
+      amplitude_ms: 20
+    - type: "psychoacoustic.masking"
+      masker_level_db: 20
+  description: "Sequential jitter then masking"
