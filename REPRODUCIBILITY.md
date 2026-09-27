@@ -1,0 +1,106 @@
+# Reproducibility
+
+How to obtain exactly what this repository produced, and how to prove it.
+
+---
+
+## 1. Environment
+
+```powershell
+python -m venv .venv
+.venv\Scripts\activate
+pip install -e ".[dev]"        # incl. vosk>=0.3.45, openai-whisper, jiwer, pandas
+```
+
+- Determinism: run seed default **42** (`--seed`), propagated into every
+  transform whose `__init__` accepts `seed`; seeds recorded in each
+  condition's `params_json`.
+- Whisper: `temperature=0`, `fp16=False` (CPU) → deterministic decoding.
+- Vosk: deterministic lattice decoding; model pinned by directory name
+  `vosk-model-small-en-us-0.15`.
+
+## 2. Exact commands
+
+```powershell
+# ---- tests (expect: 476 passed) ----
+.venv\Scripts\python -m pytest tests/ -q --basetemp=$env:TEMP\audiocaptcha-dsp\pytest
+
+# ---- data ----
+# LibriSpeech test-clean → data/raw/LibriSpeech/test-clean   (present)
+# Vosk model → data/raw/vosk/vosk-model-small-en-us-0.15      (present)
+# Whisper tiny → ~/.cache/whisper/tiny.pt                     (auto)
+# WSJ (optional, licensed):
+python scripts/prepare_wsj.py --check
+python scripts/prepare_wsj.py --build-kaldi --wsj-root <path> --out data/raw/wsj
+
+# ---- benchmark (resumable; identical command resumes) ----
+python scripts/run_comparative_benchmark.py --transforms all --workers 4 `
+    --out results/comparative/main
+# smaller/clean-room variants:
+python scripts/run_comparative_benchmark.py --dataset wsj --data-root data/raw/wsj `
+    --subset A --transforms curated --out results/comparative/wsj_exact
+python scripts/run_comparative_benchmark.py --asr none --max-utterances 2 `
+    --no-sweep --transforms noise.white --out results/comparative/smoke
+
+# ---- artifacts ----
+python scripts/make_figures.py --run results/comparative/main --out results/figures
+python scripts/make_tables.py  --run results/comparative/main --out results/tables
+```
+
+## 3. What each run proves (manifests)
+
+| File | Proves |
+|---|---|
+| `<run>/dataset_manifest.json` | exactly which utterances/speakers/transcripts, selection mode + seed, `corpus_sha256`, stand-in vs exact corpus |
+| `<run>/run_manifest.json` | CLI args, all condition definitions, ASR engine labels (`kind: real`/`heuristic_proxy`), HSR label, git commit, python/platform, package versions |
+| `<run>/rows.csv` | append-only per-(condition, utterance) evidence: metrics, WERs, hypotheses, transcripts, error rows (`status`, `error`) |
+| `<run>/summary.csv` / `summary.json` | aggregates, ranks, Pareto flags, baselines, labels |
+| `<run>/ranking.md` | human-readable report with provenance header |
+
+**Rule of the house:** a number without a manifest entry is not a result.
+
+## 4. Resume / crash safety
+
+- `rows.csv` keys are `(condition_id, utt_id)`; on restart completed tasks
+  are skipped (`[tasks] X total, Y already done`).
+- Rows are written immediately after each task; killing the process loses at
+  most in-flight tasks.
+- Aggregation is pure over `rows.csv` — re-running the same command after
+  completion simply re-aggregates (and picks up code changes).
+
+## 5. Verifying claims independently
+
+1. Match `git_commit` + package versions in `run_manifest.json`.
+2. Re-select the corpus and compare `corpus_sha256`.
+3. Spot-check any row: re-apply
+   `resolve_transform(transform_key, params)` to the `source_path` file and
+   re-transcribe with the labelled engine; hypothesis text is stored.
+4. `n_ok`/`n_err` per condition expose partial failures; error rows keep the
+   exception message.
+
+## 6. Known non-reproducible-without-permission items
+
+| Item | Substitute |
+|---|---|
+| WSJ audio (LDC licence) | LibriSpeech stand-in, labelled everywhere; adapter gives bit-exact WSJ once licensed |
+| Paper's 120 target texts (private) | manifest-recorded transcripts |
+| Paper's music set (source unnamed) | `--music-dir` + manifest entry, or omitted-and-labelled |
+| Human listener data | none exists; see `HUMAN_STUDY_PROTOCOL.md` |
+
+## 7. Continuous integration (WHAT-REMAINS §13)
+
+`.github/workflows/ci.yml` runs two tiers:
+
+| Job | Trigger | What runs | Downloads |
+|---|---|---|---|
+| `unit` | push / pull request | `pytest tests/ -q` — tests needing Whisper weights, the Vosk model or LibriSpeech **self-skip** (`skipif` guards in `tests/test_asr.py`); everything else uses synthetic/tmp fixtures | **none** |
+| `full` | manual (`workflow_dispatch`, `full=true`) | same suite after fetching Whisper tiny (~40 MB, cached) + Vosk small-en (~40 MB, cached) | ASR weights only |
+
+Smoke vs full locally:
+
+```powershell
+# lightweight (what CI's unit job executes; no model downloads):
+python -m pytest tests/ -q                       # heavy tests skip if weights/corpora absent
+# full local run (all weights + LibriSpeech present):
+python -m pytest tests/ -q                       # expect every test to execute, 0 skipped ASR
+```
