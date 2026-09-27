@@ -1,0 +1,76 @@
+name: CI
+
+on:
+  push:
+    branches: [main, master]
+  pull_request:
+  workflow_dispatch:
+    inputs:
+      full:
+        description: "Run the full suite with ASR model weights"
+        type: boolean
+        default: false
+
+jobs:
+  # ---------------------------------------------------------------------------
+  # Lightweight unit suite (WHAT-REMAINS §13):
+  # runs WITHOUT downloading large models or datasets — tests that need
+  # Whisper weights / the Vosk model / LibriSpeech skip themselves.
+  # ---------------------------------------------------------------------------
+  unit:
+    name: unit (no models, no datasets)
+    runs-on: ubuntu-latest
+    steps:
+      - uses: actions/checkout@v4
+      - uses: actions/setup-python@v5
+        with:
+          python-version: "3.11"
+          cache: pip
+      - name: Install package
+        run: pip install -e ".[dev]"
+      - name: Lightweight suite
+        run: python -m pytest tests/ -q
+
+  # ---------------------------------------------------------------------------
+  # Full suite (manual dispatch): additionally downloads the small ASR models
+  # (Whisper tiny ~40 MB, Vosk small-en ~40 MB) so ASR adapter tests execute.
+  # LibriSpeech is intentionally not fetched (LDC-scale corpora are documented
+  # in DATASETS.md / REPRODUCIBILITY.md instead).
+  # ---------------------------------------------------------------------------
+  full:
+    name: full (with ASR weights)
+    if: github.event_name == 'workflow_dispatch' && inputs.full
+    runs-on: ubuntu-latest
+    steps:
+      - uses: actions/checkout@v4
+      - uses: actions/setup-python@v5
+        with:
+          python-version: "3.11"
+          cache: pip
+      - name: Cache ASR weights
+        uses: actions/cache@v4
+        with:
+          path: |
+            ~/.cache/whisper
+            data/raw/vosk
+          key: asr-weights-v1
+      - name: Install package
+        run: pip install -e ".[dev]"
+      - name: Fetch Whisper tiny weights
+        run: python -c "import whisper; whisper.load_model('tiny')"
+      - name: Fetch Vosk small-en model
+        run: |
+          python - <<'EOF'
+          import pathlib, urllib.request, zipfile
+          url = "https://alphacephei.com/vosk/models/vosk-model-small-en-us-0.15.zip"
+          root = pathlib.Path("data/raw/vosk")
+          root.mkdir(parents=True, exist_ok=True)
+          zpath = root / "model.zip"
+          if not (root / "vosk-model-small-en-us-0.15").exists():
+              urllib.request.urlretrieve(url, zpath)
+              with zipfile.ZipFile(zpath) as z:
+                  z.extractall(root)
+              zpath.unlink()
+          EOF
+      - name: Full suite
+        run: python -m pytest tests/ -q
