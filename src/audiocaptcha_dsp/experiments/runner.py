@@ -26,6 +26,33 @@ from audiocaptcha_dsp.transforms.temporal.jitter import TemporalJitter
 from audiocaptcha_dsp.transforms.temporal.overlap_add import PerturbedOverlapAdd
 from audiocaptcha_dsp.transforms.temporal.resampler import Resampler
 
+from audiocaptcha_dsp.transforms.baseline.gain import (
+    IdentityTransform, GainTransform, PeakNormalize, RMSNormalize, LoudnessNormalize,
+    DynamicRangeCompressor, Limiter, SilencePadding, SampleRateConverter, BitDepthConverter, MuLawCompanding
+)
+from audiocaptcha_dsp.transforms.noise.additive import (
+    WhiteNoise, PinkNoise, BrownNoise, BandLimitedNoise, SpeechShapedNoise, ImpulsiveNoise, TonalInterference
+)
+from audiocaptcha_dsp.transforms.noise.reverberation import Reverberation, SimpleEcho
+
+# Extended temporal
+from audiocaptcha_dsp.transforms.temporal.stretching import TimeStretch, PitchShift, SpeedPerturbation, TimeMasking, TemporalDropout, LocalTimeWarping
+# Extended spectral filtering
+from audiocaptcha_dsp.transforms.spectral.filtering import BandpassFilter, LowpassFilter, HighpassFilter, SpectralTilt, SpectralSmoothing, FrequencyBinDropout, PhaseRandomization, CombFilter, HarmonicAttenuation
+# Extended mel masking
+from audiocaptcha_dsp.transforms.spectral.mel_masking import MelBandMasking, BarkBandMasking, CriticalBandAttenuation
+# Psychoacoustic constrained
+from audiocaptcha_dsp.transforms.psychoacoustic.constrained import PsychoacousticNoiseInjection, BarkScalePerturbation
+# Novel transforms (our paper's proposed contributions)
+from audiocaptcha_dsp.transforms.novel import (
+    PhonemeAwarePerturbation,
+    PhonemeSegmentDropout,
+    MultiDomainPerturbation,
+    AdaptiveFormantPerturbation,
+    CAPTCHAOptimalTransform,
+    DefenseRobustTransform,
+)
+
 logger = logging.getLogger(__name__)
 
 _TRANSFORM_REGISTRY: dict[str, type] = {
@@ -35,6 +62,52 @@ _TRANSFORM_REGISTRY: dict[str, type] = {
     "spectral.masking": MaskingInjection,
     "spectral.notch": SpectralNotch,
     "spectral.warping": FrequencyWarping,
+    "temporal.time_stretch": TimeStretch,
+    "temporal.pitch_shift": PitchShift,
+    "temporal.speed_perturbation": SpeedPerturbation,
+    "temporal.time_masking": TimeMasking,
+    "temporal.dropout": TemporalDropout,
+    "temporal.local_warp": LocalTimeWarping,
+    "spectral.bandpass": BandpassFilter,
+    "spectral.lowpass": LowpassFilter,
+    "spectral.highpass": HighpassFilter,
+    "spectral.tilt": SpectralTilt,
+    "spectral.smoothing": SpectralSmoothing,
+    "spectral.freq_dropout": FrequencyBinDropout,
+    "spectral.phase_randomization": PhaseRandomization,
+    "spectral.comb_filter": CombFilter,
+    "spectral.harmonic_attenuation": HarmonicAttenuation,
+    "spectral.mel_masking": MelBandMasking,
+    "spectral.bark_masking": BarkBandMasking,
+    "spectral.critical_band_attenuation": CriticalBandAttenuation,
+    "psychoacoustic.masked_noise": PsychoacousticNoiseInjection,
+    "psychoacoustic.bark_perturbation": BarkScalePerturbation,
+    "novel.phoneme_aware": PhonemeAwarePerturbation,
+    "novel.phoneme_dropout": PhonemeSegmentDropout,
+    "novel.multi_domain": MultiDomainPerturbation,
+    "novel.adaptive_formant": AdaptiveFormantPerturbation,
+    "novel.captcha_optimal": CAPTCHAOptimalTransform,
+    "novel.defense_robust": DefenseRobustTransform,
+    "baseline.identity": IdentityTransform,
+    "baseline.gain": GainTransform,
+    "baseline.peak_normalize": PeakNormalize,
+    "baseline.rms_normalize": RMSNormalize,
+    "baseline.loudness_normalize": LoudnessNormalize,
+    "baseline.compressor": DynamicRangeCompressor,
+    "baseline.limiter": Limiter,
+    "baseline.silence_padding": SilencePadding,
+    "baseline.sample_rate_converter": SampleRateConverter,
+    "baseline.bit_depth_converter": BitDepthConverter,
+    "baseline.mu_law_companding": MuLawCompanding,
+    "noise.white": WhiteNoise,
+    "noise.pink": PinkNoise,
+    "noise.brown": BrownNoise,
+    "noise.band_limited": BandLimitedNoise,
+    "noise.speech_shaped": SpeechShapedNoise,
+    "noise.impulsive": ImpulsiveNoise,
+    "noise.tonal": TonalInterference,
+    "noise.reverberation": Reverberation,
+    "noise.echo": SimpleEcho,
 }
 
 
@@ -44,8 +117,22 @@ def resolve_transform(type_name: str, params: dict[str, Any] | None = None) -> T
         cls = _TRANSFORM_REGISTRY[type_name]
         filtered = {k: v for k, v in params.items() if k not in ("condition_index", "sample_index")}
         return cls(**filtered)
+    # Fall back to the central taxonomy registry (families A–H, full catalog).
+    # Registry default parameters act as defaults; explicit params win.
+    from audiocaptcha_dsp.transforms.registry import get_registry
+
+    reg = get_registry()
+    if type_name in reg:
+        spec = reg[type_name]
+        filtered = {
+            k: v for k, v in params.items()
+            if k not in ("condition_index", "sample_index", "type", "name")
+        }
+        merged = {**spec.params, **filtered}
+        return spec.cls(**merged)
     raise ValueError(
-        f"Unknown transform type: '{type_name}'. Available: {list(_TRANSFORM_REGISTRY.keys())}"
+        f"Unknown transform type: '{type_name}'. Available: "
+        f"{sorted(set(_TRANSFORM_REGISTRY) | set(reg))}"
     )
 
 
