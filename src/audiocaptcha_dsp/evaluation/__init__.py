@@ -9,9 +9,32 @@ from audiocaptcha_dsp.evaluation.metrics import (
     compute_spectral_convergence,
     compute_normalized_cross_correlation,
 )
-from audiocaptcha_dsp.evaluation.dataset import AudioDataset
+from audiocaptcha_dsp.evaluation.dataset import (
+    AudioDataset,
+    WSJAdapter,
+    WSJDataset,
+    BASE_PAPER_SUBSETS,
+    BASE_PAPER_MAX_PHONES_PER_S,
+    KALDI_WSJ_TEST_SETS,
+    estimate_phoneme_count,
+    phone_rate,
+    select_paper_subset,
+)
 from audiocaptcha_dsp.evaluation.conditions import ExperimentConditions
-from audiocaptcha_dsp.evaluation.stats import bootstrap_ci, summarize_condition, ConditionSummary
+from audiocaptcha_dsp.evaluation.stats import (
+    bootstrap_ci,
+    bootstrap_ci_bca,
+    cohens_d,
+    hedges_g,
+    bonferroni_correction,
+    benjamini_hochberg_correction,
+    mann_whitney_u,
+    welch_ttest,
+    compare_conditions,
+    ComparisonResult,
+    summarize_condition,
+    ConditionSummary,
+)
 
 __all__ = [
     "compute_wer",
@@ -24,8 +47,25 @@ __all__ = [
     "compute_spectral_convergence",
     "compute_normalized_cross_correlation",
     "AudioDataset",
+    "WSJAdapter",
+    "WSJDataset",
+    "BASE_PAPER_SUBSETS",
+    "BASE_PAPER_MAX_PHONES_PER_S",
+    "KALDI_WSJ_TEST_SETS",
+    "estimate_phoneme_count",
+    "phone_rate",
+    "select_paper_subset",
     "ExperimentConditions",
     "bootstrap_ci",
+    "bootstrap_ci_bca",
+    "cohens_d",
+    "hedges_g",
+    "bonferroni_correction",
+    "benjamini_hochberg_correction",
+    "mann_whitney_u",
+    "welch_ttest",
+    "compare_conditions",
+    "ComparisonResult",
     "summarize_condition",
     "ConditionSummary",
 ]
