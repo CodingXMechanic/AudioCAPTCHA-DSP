@@ -1,9 +1,10 @@
 # Gap Analysis — Base Paper & Literature Survey
 
-**Base paper:** Schönherr, Kohrs, Risch, Michel — *Adversarial Attacks Against
-Automatic Speech Recognition Systems via Psychoacoustic Hiding*
-(arXiv:1808.05665; IEEE/ACM TASLP; cited as Paper 11 in
-`WHAT-REMAINS.txt`, the recommended base).
+**Base paper:** Schönherr, Kohls, Zeiler, Holz, Kolossa — *Adversarial Attacks
+Against Automatic Speech Recognition Systems via Psychoacoustic Hiding*
+(arXiv:1808.05665v2, 2018; the WHAT-REMAINS survey lists the venue as
+IEEE/ACM TASLP — verify against the published version when the PDF is on
+file; cited as Paper 11 in `WHAT-REMAINS.txt`, the recommended base).
 
 This document lists every gap we identified in the base paper and in the
 23-paper literature survey, and maps each gap to the concrete artifact in

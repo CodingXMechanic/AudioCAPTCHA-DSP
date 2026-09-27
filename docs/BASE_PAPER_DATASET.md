@@ -1,8 +1,12 @@
 # Base-Paper Dataset — Fidelity Contract
 
-**Base paper:** Schönherr, Kohrs, Risch, Michel, "Improving White-Box
-Adversarial Examples for Fooling Deep Learning-based Audio CAPTCHAs,"
-arXiv:1808.05665, 2018 (PETS).
+**Base paper:** Schönherr, Kohls, Zeiler, Holz, Kolossa, "Adversarial
+Attacks Against Automatic Speech Recognition Systems via Psychoacoustic
+Hiding," arXiv:1808.05665v2, 2018.
+
+*(Citation and every fact in §1 re-verified against the arXiv v2 HTML on
+2026-09-28. An earlier header in this file misnamed the title, authors,
+and venue — corrected. Matches Paper 11 in `WHAT-REMAINS.txt`.)*
 
 This document records *exactly* what dataset and subsets the base paper used,
 what of that we reproduce, what cannot be reproduced bit-exactly (and why),
@@ -23,9 +27,13 @@ reports.
 | Subset B | §IV-B, Table I | test set of speech = **72 samples**, test set of music = **70 samples** ("the test set of speech was the same as for the previous evaluations") |
 | Subset C | §IV-D3 | "randomly chose speech files from **150 samples** and music files from **72 samples**"; only **audio–text pairs with a phone rate of ≤ 6 phones per second**; experiment repeated **100× per λ** for speech and music; target chosen from **120 predefined texts** |
 | Phone-rate optimum | §IV-D2 | minimum WER at **4 phones/s**, hence the ≤ 6 phones/s constraint |
-| λ (margin) sweep | Tables I–II | λ ∈ {0, 5, 10, …, 50} dB (+ "None" = no hearing thresholds), iterations 500/1000 (WPT up to 5000) |
-| Transcription test | §V-A1 | **21 samples per listener** = 9 original + 9 adversarial (3 each at λ=0/20/40) + 3 difference signals; **22 listeners**; WER original 12.59 % vs adversarial 12.61 %; two-sided t-test at 1 % |
-| MUSHRA test | §V-A2 | **9 samples** (3 speech, 3 music, 3 bird twittering) × {λ=0/20/40, no-threshold anchor}; one-sided t-tests at 1 % |
+| λ (margin) sweep | Tables I–II | λ ∈ {0, 10, 20, 30, 40, 50} dB (+ "None" = no hearing thresholds), iterations 500/1000; §IV-D3 uses λ ∈ {0, 20, 40}, success = 0 % WER vs target, max 5000 iterations |
+| Transcription test | §V-A1–A2 | **21 samples per listener** = 9 original + 9 adversarial (3 each at λ=0/20/40) + 3 difference signals; **22 listeners**; WER original 12.59 % vs adversarial 12.61 %; two-sided t-test at 1 % (no difference) |
+| MUSHRA test | §V-B | **9 samples** (3 speech, 3 music, 3 bird twittering) × {λ=0/20/40, no-threshold anchor}; one-sided t-tests at 1 %; 30 listeners collected, 3 excluded → 27 analysed |
+| Attack success + cost | Abstract, §VII | **up to 98 %** of targeted cases; **< 2 min** generation per 10 s audio file (6-core Intel Core i7-4960X) |
+| WER over λ (speech, 500 iter) | Table I | None 2.14 %, 50 dB 6.96, 40 dB 11.07, 30 dB 16.43, 20 dB 36.43, 10 dB 92.69, 0 dB 138.21 — WER vs **target** text; their λ = allowed *excess above* threshold (mirrored vs our margin convention) |
+| Perceptibility ϕ (speech, 500 iter) | Table II | None 10.11 dB, 50 dB 6.67, 40 dB 6.53, 30 dB 5.88, 20 dB 5.49, 10 dB 4.70, 0 dB 3.05 |
+| Attack ablation | §IV-C | baseline WER 1.43 % (ϕ 11.62 dB) → +hearing thresholds 64.29 % (ϕ 7.04 dB) → +forced alignment at λ=20: 36.43 % (ϕ 5.49 dB) |
 
 Notes:
 

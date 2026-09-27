@@ -57,7 +57,7 @@ control and λ=0 rows is attributable purely to psychoacoustic structure.
 ## N5. Uniform λ-sweep across four psychoacoustic transforms
 
 **Novel because:** the paper sweeps λ only for its own hiding method, on
-one attack. Applying the identical λ grid (0…50 dB) to four different
+one attack. Applying the same 0…50 dB λ range (base paper: step-10 grid, Tables I–II; we additionally sample λ=5) to four different
 budget-constrained transforms makes margin sensitivity *comparable across
 methods*.
 **Artifact:** `SWEEP_TARGETS`/`SWEEP_MARGINS_DB`; `fig2_lambda_sweep_mirror.*`,

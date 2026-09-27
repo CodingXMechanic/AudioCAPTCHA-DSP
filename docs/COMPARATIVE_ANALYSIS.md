@@ -145,9 +145,16 @@ unconstrained control (`None`).
 
 Findings (see `fig2`, `fig6`, `tables/lambda_sweep.csv`):
 
-1. **Monotonic trade-off**: increasing λ (tighter auditory masking constraint)
-   monotonically lowers attack strength and raises human intelligibility —
-   the same qualitative trend the base paper reports.
+1. **Monotonic trade-off**: a tighter auditory masking constraint monotonically
+   lowers attack strength and raises human intelligibility — the same
+   qualitative trend the base paper reports. **λ conventions are mirrored,
+   however:** our λ is a margin *below* the threshold (larger λ = tighter,
+   noise further below signal: SNR ≈ λ + 0.3 dB), while their λ is an allowed
+   *excess above* the threshold (larger λ = looser: their WER-to-target drops
+   138 % → 6.96 % from λ=0 to λ=50, Table I). Their WER is measured against
+   the **target** text (targeted insertion), ours against the **reference**
+   (untargeted degradation) — so trends are compared in constraint-tightness
+   terms; numeric λ values must never be compared across the two papers.
 2. **λ = 0 is the operating point**: unconstrained-in-mask cross-ΔWER 0.362
    at STOI 0.882; the *unconstrained* control (0.498 at STOI 0.675) confirms
    that the masking constraint — not power — is what buys human preservation.
