@@ -45,6 +45,12 @@ python scripts/run_comparative_benchmark.py --asr none --max-utterances 2 `
 # ---- artifacts ----
 python scripts/make_figures.py --run results/comparative/main --out results/figures
 python scripts/make_tables.py  --run results/comparative/main --out results/tables
+
+# ---- human-proxy validation vs real listener scores (docs/HUMAN_PROXY_VALIDATION.md) ----
+# data: TMHINT-QI release (InQSS) → data/references/tmhintqi/TMHINTQI/{raw_data.csv,test,train}
+pip install pystoi                               # optional reference metric
+python scripts/validate_human_proxy.py --split test --jobs 4
+python scripts/validate_human_proxy.py --split all  --jobs 4   # → results/validation/
 ```
 
 ## 3. What each run proves (manifests)
@@ -85,7 +91,7 @@ python scripts/make_tables.py  --run results/comparative/main --out results/tabl
 | WSJ audio (LDC licence) | LibriSpeech stand-in, labelled everywhere; adapter gives bit-exact WSJ once licensed |
 | Paper's 120 target texts (private) | manifest-recorded transcripts |
 | Paper's music set (source unnamed) | `--music-dir` + manifest entry, or omitted-and-labelled |
-| Human listener data | none exists; see `HUMAN_STUDY_PROTOCOL.md` |
+| Human listener data | none exists for our corpus; see `HUMAN_STUDY_PROTOCOL.md` — the STOI-based proxy is checked against real listener scores on the public TMHINT-QI corpus (`docs/HUMAN_PROXY_VALIDATION.md`) |
 
 ## 7. Continuous integration (WHAT-REMAINS §13)
 
