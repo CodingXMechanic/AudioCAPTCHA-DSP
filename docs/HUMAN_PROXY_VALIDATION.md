@@ -133,7 +133,7 @@ reachable for stoi in [0, 1]) — i.e. the table *is* the HSR validation.
   expected here: on this corpus *no objective metric exceeds 0.8*
   correlation with human scores, and STOI is documented as suboptimal
   for intelligibility (WER and NCM rank higher) — see the corpus's own
-  correlation study in `data/references/papers/notes/`. Reference STOI
+  correlation study in `docs/LITERATURE_SURVEY/`. Reference STOI
   itself reaches only r = 0.41-0.47 under identical conditions; our
   lightweight proxy (STFT envelope correlation, no 1/3-octave banding or
   temporal context) sits just below the standard metric, which its
@@ -172,5 +172,5 @@ python scripts/validate_human_proxy.py --split all  --jobs 4   # ~9 min
 2. Chen & Tsao — *InQSS*, INTERSPEECH 2022 (+ TMHINT-QI release;
    github.com/yuwchen/InQSS).
 3. The TMHINT-QI objective-vs-subjective correlation study (survey note:
-   `data/references/papers/notes/Study on the Correlation ...`).
+   `docs/LITERATURE_SURVEY/Study on the Correlation ...`).
 4. Taal et al. (2011) — STOI (basis of `compute_stoi_proxy`).
