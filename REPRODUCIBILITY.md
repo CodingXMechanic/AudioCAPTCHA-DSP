@@ -26,20 +26,29 @@ pip install -e ".[dev,ssl]"    # + wav2vec2 adapter (optional `ssl` extra)
 ## 2. Exact commands
 
 ```powershell
-# ---- tests (expect: 476 passed) ----
+# ---- tests (expect: 488 passed) ----
 .venv\Scripts\python -m pytest tests/ -q --basetemp=$env:TEMP\audiocaptcha-dsp\pytest
 
 # ---- data ----
 # LibriSpeech test-clean → data/raw/LibriSpeech/test-clean   (present)
 # Vosk model → data/raw/vosk/vosk-model-small-en-us-0.15      (present)
-# Whisper tiny → ~/.cache/whisper/tiny.pt                     (auto)
+# Whisper tiny/small → ~/.cache/whisper/{tiny,small}.pt       (auto)
+# wav2vec2 → ~/.cache/huggingface (auto; needs the `ssl` extra)
 # WSJ (optional, licensed):
 python scripts/prepare_wsj.py --check
 python scripts/prepare_wsj.py --build-kaldi --wsj-root <path> --out data/raw/wsj
 
-# ---- benchmark (resumable; identical command resumes) ----
+# ---- headline benchmark (resumable; identical command resumes) ----
 python scripts/run_comparative_benchmark.py --transforms all --workers 4 `
     --out results/comparative/main
+# ---- 4-engine transfer validation (top-K conditions) ----
+# each worker holds all four models (~3 GB) -> 3 workers on a 16 GB machine
+python scripts/run_comparative_benchmark.py --workers 3 `
+    --transforms spectral.minimum_phase,novel.captcha_optimal,noise.clicks,`
+spectral.phase_randomization,novel.multi_domain,novel.defense_robust,`
+channel.codec_simulation,channel.packet_jitter,baseline.loudness_normalize `
+    --no-sweep --asr whisper_tiny,vosk_small_en,whisper_small,wav2vec2_base `
+    --out results/comparative/engine_validation
 # smaller/clean-room variants:
 python scripts/run_comparative_benchmark.py --dataset wsj --data-root data/raw/wsj `
     --subset A --transforms curated --out results/comparative/wsj_exact
@@ -103,8 +112,8 @@ python scripts/validate_human_proxy.py --split all  --jobs 4   # → results/val
 
 | Job | Trigger | What runs | Downloads |
 |---|---|---|---|
-| `unit` | push / pull request | `pytest tests/ -q` — tests needing Whisper weights, the Vosk model or LibriSpeech **self-skip** (`skipif` guards in `tests/test_asr.py`); everything else uses synthetic/tmp fixtures | **none** |
-| `full` | manual (`workflow_dispatch`, `full=true`) | same suite after fetching Whisper tiny (~40 MB, cached) + Vosk small-en (~40 MB, cached) | ASR weights only |
+| `unit` | push / pull request | `pytest tests/ -q` — tests needing Whisper weights, the Vosk model, wav2vec2 weights or LibriSpeech **self-skip** (`skipif` guards in `tests/test_asr.py`); everything else uses synthetic/tmp fixtures | **none** |
+| `full` | manual (`workflow_dispatch`, `full=true`) | same suite after installing `.[dev,ssl]` and fetching Whisper tiny (~40 MB, cached) + Vosk small-en (~40 MB, cached) + wav2vec2-base (~360 MB, Hugging Face cache) | ASR weights only |
 
 Smoke vs full locally:
 

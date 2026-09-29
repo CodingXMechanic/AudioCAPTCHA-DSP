@@ -67,7 +67,7 @@ Mirrors WHAT-REMAINS §7 / base-paper §"fair comparison":
 | Human intelligibility | `stoi_proxy` (STOI-style correlation-based proxy), MBSD, SNR | `evaluation/metrics.py` |
 | Human success | `hsr` — **labelled illustrative** (STOI-derived; no human study) | `evaluation/hag_metrics.py` |
 | ASR robustness | WER per engine (jiwer), ΔWER vs per-engine baseline | `asr/`, `compute_wer` |
-| Cross-model transfer | `cross_delta_wer` = mean ΔWER over independent families | `experiments/comparative.py` |
+| Cross-model transfer | `cross_delta_wer` = mean ΔWER over the run's independent engines (family-macro when a family has >1 engine) | `experiments/comparative.py` |
 | Security gap | `hag`, `asr_sr`, `css`, `dsr`, `cmfr`, `prr` | `SecurityEvaluator` |
 
 Transcripts are normalized (`normalize_transcript`: lowercase, strip
@@ -118,7 +118,7 @@ the dataset protocol reference and the HSR illustrative-label sentence
 ## 9. Reproducibility commands
 
 ```bash
-# tests (476 green)
+# tests (488 green)
 python -m pytest tests/ -q
 
 # headline benchmark (resumable)

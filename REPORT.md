@@ -42,7 +42,7 @@ with attacker model capacity. Human-success values throughout are an
 | 9 statistics | bootstrap (percentile/BCa), Wilcoxon, permutation, BH/Bonferroni, Cohen's d/Hedges' g | `evaluation/stats.py` |
 | 10–11 human study + CAPTCHA | HSR data model, STOI-proxy labeling discipline, CAPTCHA prototype layer (9 tests) | `docs/HUMAN_STUDY.md`, `tests/test_captcha*.py` |
 | 12 visualization | **16 figures** (PNG+SVG+PDF, metadata footers), coverage matrix incl. honest gaps | `scripts/make_figures.py`, `results/figures/` |
-| 13 testing | **476 tests green**; CI with download-free unit job + workflow-dispatch full job | `tests/`, `.github/workflows/ci.yml` |
+| 13 testing | **488 tests green**; CI with download-free unit job + workflow-dispatch full job (wav2vec2 weights cached) | `tests/`, `.github/workflows/ci.yml` |
 | 14 safety/integrity | 9-attacker threat model, non-claims, no-fabrication rules enforced by tests | `THREAT_MODEL.md` |
 | 15 documentation | 13 root documents + `docs/` linked from README | README doc table |
 | 16 contributions | claim-gated contribution checklist (only evidence-backed claims retained) | `PAPER_RESULTS_GUIDE.md` §5 |
@@ -140,15 +140,17 @@ scenario-based extrapolation, illustrative HSR proxy.
 ## 5. Test results
 
 ```
-476 passed — full suite in a single `pytest tests/` run (209.6 s, 4 benign warnings)
+488 passed — full suite in a single `pytest tests/` run (≈350 s, 4 benign warnings)
 ```
 
 Coverage includes: registry integrity (every transform cited — enforced),
-WSJ-protocol fidelity (21), benchmark logic (17), shelf-life N11 incl. a live
-ladder smoke (17), CAPTCHA layer (9), CLI scripts (6), Vosk adapter,
+WSJ-protocol fidelity (21), benchmark logic (24, incl. the four-engine
+registry and family-macro ΔWER), shelf-life N11 incl. a live ladder smoke
+(17), CAPTCHA layer (9), CLI scripts (6), Whisper/Vosk/wav2vec2 adapters,
 manifests/resume, figure/table generation end-to-end. CI: unit job on
-push/PR without downloads; full job (fetches Whisper tiny + Vosk) via
-workflow dispatch. Reproduction: `REPRODUCIBILITY.md` §7.
+push/PR without downloads; full job (fetches Whisper tiny + Vosk +
+wav2vec2, caches them) via workflow dispatch. Reproduction:
+`REPRODUCIBILITY.md` §7.
 
 ---
 

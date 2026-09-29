@@ -39,11 +39,12 @@ All computed by `compute_metrics(original, processed)` and stored per
 | `cer` | `compute_cer` (available; benchmark uses WER for comparability with the base paper) |
 | `detailed_wer` | substitutions/deletions/insertions breakdown |
 | **ΔWER** | WER(condition) − WER(original) *per engine* |
-| **`cross_delta_wer`** | mean ΔWER over independent engines — headline attack metric |
+| **`cross_delta_wer`** | mean ΔWER over the engines evaluated in the run — headline (Whisper tiny + Vosk, the two independent families); family-macro when one lineage has >1 engine (4-engine validation) — headline attack metric |
 
 Baseline WERs are always printed with the run
-(`[baseline WER] whisper_tiny=…, vosk_small_en=…`) and stored in
-`summary.json.baseline_wer`.
+(`[baseline WER] whisper_tiny=…, vosk_small_en=…` for the headline; the
+validation run additionally prints `whisper_small=…, wav2vec2_base=…`) and
+stored in `summary.json.baseline_wer`.
 
 ## D. Human metrics — *Protocol ready; values currently illustrative*
 

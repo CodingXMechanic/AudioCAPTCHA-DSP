@@ -26,13 +26,19 @@ below is also reflected in the generated outputs' labels.
 
 ## 3. ASR-axis limitations
 
-- **Two engines, both small models** (Whisper tiny, Vosk small). Larger
-  Whisper variants may be more robust; results are engine-specific. No claim
-  about unseen future architectures.
+- **Headline = two engines, both small models** (Whisper tiny 39 M, Vosk
+  small). The four-engine extension (Whisper small 244 M, wav2vec2-base
+  95 M) covers only the top-K subset (11 conditions — top-8 attacks,
+  control, benign, `original`); the full 147-condition × 4-engine matrix
+  was **not** run (≈ 35 h on this hardware; cost declared, never implied).
+  Large models (Whisper medium/large, wav2vec2-large) are untested;
+  results remain engine-specific and no claim is made about unseen future
+  architectures.
 - **`IndependentASREngine` is heuristic/metadata-driven** — usable as a test
   double only; excluded from every ΔWER claim (tagged `heuristic_proxy`).
-- **SSL family (papers 19–21) not evaluated**: `transformers` unavailable in
-  this environment → *Not supported*.
+- **SSL depth is one model**: `wav2vec2-base` carries the self-supervised
+  family in the validation run; HuBERT/WavLM/wav2vec2-large are *not
+  evaluated* (stated, not half-implemented).
 - Exact paper ASR (Kaldi WSJ DNN-HMM) requires WSJ training; Vosk is a
   lineage stand-in, not the same model.
 

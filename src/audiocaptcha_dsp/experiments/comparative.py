@@ -5,13 +5,15 @@ Ranks every registered transform (families A–H) on two axes:
 * **Human-intelligibility axis** — STOI proxy (honest, signal-based) and the
   SecurityEvaluator HSR (**labelled illustrative**: it is STOI-derived, no
   human study has been conducted).
-* **ASR-effectiveness axis** — WER increase on *three genuinely independent
-  ASR families*: OpenAI Whisper tiny + small (attention encoder-decoder,
-  two sizes of one family), Vosk small-en (Kaldi nnet3 lineage — the same
-  toolkit family as the base paper's white-box DNN-HMM) and wav2vec 2.0
-  base (self-supervised encoder, CTC head).  The headline attack metric is
-  the family-macro average of cross-family delta-WER, so each lineage
-  weighs exactly once regardless of how many sizes it is measured at.
+* **ASR-effectiveness axis** — WER increase on *two genuinely independent
+  ASR families* for the full matrix: OpenAI Whisper tiny (attention
+  encoder-decoder) and Vosk small-en (Kaldi nnet3 lineage — the same
+  toolkit family as the base paper's white-box DNN-HMM).  Cross-family
+  delta-WER is the headline attack metric.  A four-engine extension
+  (adding Whisper small and the self-supervised wav2vec 2.0) evaluates the
+  targeted transfer-validation subset via ``--asr``; whenever one family
+  is measured at more than one size the delta is macro-averaged per family
+  (``_macro_family_delta``) so no lineage outweighs another.
 
 Dataset fidelity (see docs/BASE_PAPER_DATASET.md): the sample selection
 reuses ``WSJAdapter.load_base_paper_subset`` — the exact base-paper
@@ -85,7 +87,11 @@ ASR_LABELS: dict[str, dict[str, str]] = {
         "kind": "real",
     },
 }
-DEFAULT_ENGINES = list(ASR_LABELS)
+# Paper headline (results/comparative/main): the two-family matrix —
+# Whisper tiny + Vosk small-en.  The extended four-engine set (adds
+# Whisper small + wav2vec2-base) is requested explicitly via ``--asr``,
+# e.g. for the targeted transfer-validation run.
+DEFAULT_ENGINES = ["whisper_tiny", "vosk_small_en"]
 
 DEFAULT_TRANSFORMS = [
     "noise.white", "noise.babble", "noise.pink", "noise.band_limited",

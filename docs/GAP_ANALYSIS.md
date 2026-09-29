@@ -17,7 +17,7 @@ generated result — claims are not made without one.
 
 | # | Gap in the base paper | What they did | What we do | Evidence |
 |---|---|---|---|---|
-| G1 | **Single, white-box ASR** | One Kaldi DNN-HMM from the WSJ recipe; attacks optimized against it only | Two *real, independent* ASR families: **Whisper tiny** (attention encoder-decoder) and **Vosk small-en** (Kaldi nnet3 — same lineage as their model). Headline metric is **cross-family ΔWER**, i.e. black-box transfer | `asr/vosk_adapter.py`, `asr/whisper_adapter.py`, `experiments/comparative.py`; per-engine columns in `results/comparative/main/summary.csv` |
+| G1 | **Single, white-box ASR** | One Kaldi DNN-HMM from the WSJ recipe; attacks optimized against it only | Two *real, independent* ASR families in the full matrix: **Whisper tiny** (attention encoder-decoder) and **Vosk small-en** (Kaldi nnet3 — same lineage as their model), extended to a **four-engine transfer validation** (+ **Whisper small**, **wav2vec2-base** SSL) on the top-8 attacks. Headline metric is **cross-family ΔWER**, i.e. black-box transfer | `asr/whisper_adapter.py`, `asr/vosk_adapter.py`, `asr/wav2vec2_adapter.py`, `experiments/comparative.py`; per-engine columns in `results/comparative/main/summary.csv` |
 | G2 | **Undisclosed subset identity** | "70 utterances for 10 different speakers from one of the WSJ test sets" — no test set named, no utterance IDs, no target texts published | Protocol-exact reproduction (counts, selection procedure, ≤6 phones/s constraint) + **dataset manifest with corpus_sha256 and full ID lists**, so any reviewer re-runs the identical selection | `docs/BASE_PAPER_DATASET.md`, `evaluation/dataset.py` (`BASE_PAPER_SUBSETS`, `select_paper_subset`), `results/*/dataset_manifest.json` |
 | G3 | **Human study not reproducible** | 21 samples × 22 listeners transcription test; MUSHRA with 9 samples | Same *condition layout* supported (MUSHRA-style conditions, 9-sample sets) but HSR reported as an explicitly **labelled illustrative STOI-derived proxy** — never a fabricated human result | `evaluation/hag_metrics.py` (`SecurityEvaluator`, `n_human_participants=0` path), `HSR_LABEL` in `experiments/comparative.py` |
 | G4 | **λ-sweep only for their own attack** | λ ∈ {0…50} dB + "None" for their psychoacoustic hiding only | λ-grid **sweep across four psychoacoustic transforms** (masked_noise, bark_perturbation, temporal_masking, signal_threshold) *plus* a rigorously **power-matched "None" control** (same perturbation energy as λ=0, no masking structure) — the paper's "None" power level was not specified | `build_conditions`/`apply_no_threshold_control` in `experiments/comparative.py`; `fig2_lambda_sweep_mirror.*`, `lambda_sweep.*` |
@@ -65,14 +65,17 @@ diverse DSP transform space.** Specifically absent across all 23:
 | **11 (base paper)** | **dataset/subset protocol, λ-grid, "None" column concept, WSJ/Kaldi basis** | `dataset.py`, `build_conditions`, `docs/BASE_PAPER_DATASET.md` |
 | 12, 13 (Bark/MBSD) | Bark-scale masking + **MBSD** as perceptual metric (`mbsd` column everywhere) | `psychoacoustics/`, `evaluation/metrics.py` |
 | 15 (STOI correlation) | STOI proxy as the human axis (chosen over PESQ per metric-validation evidence) | `compute_stoi_proxy` |
-| 19–21 (SSL) | documented as *not adopted*; honest labelling of the heuristic engine | `run_manifest.json` (`kind` fields) |
+| 19 (wav2vec 2.0) | self-supervised family as an **evaluation engine in the transfer-validation run** (`wav2vec2-base`, greedy CTC, offline-cached weights) | `asr/wav2vec2_adapter.py` |
+| 20, 21 (HuBERT / phonetic-vs-semantic) | phonetic-dominance rationale for the Kaldi-lineage engine and phoneme-granular transforms (larger SSL models *not* evaluated — stated) | `docs/IMPROVEMENTS_VS_LITERATURE.md` §E |
 
 **Not adopted (declared):** PESQ (paper 16) — ITU code licence, replaced by
 MBSD+STOI; MOS predictors (17, 18) — model weights not shippable offline;
-SSL feature attacks (7, 19–21) — resolvable in this environment but
-deliberately **not adopted** (scope decision: original novelty N11,
-shelf-life forecasting, prioritized instead), recorded as future work;
-deepfake detection (22, 23) — inverse problem, out of scope.
+SSL *feature-space* attacks (7) — deliberately **not adopted** (scope
+decision: original novelty N11, shelf-life forecasting, prioritized
+instead), recorded as future work (the SSL *representation* papers 19–21
+are adopted on the evaluation side instead: wav2vec2-base as an engine in
+the four-engine transfer-validation run); deepfake detection (22, 23) —
+inverse problem, out of scope.
 
 ## 4. Residual gaps (honest, open)
 
@@ -83,5 +86,9 @@ deepfake detection (22, 23) — inverse problem, out of scope.
   LibriSpeech stand-in.
 - **The paper's 120 target texts** — private; our target texts are recorded
   in manifests instead.
-- **Second independent ASR depth** — Vosk adds real Kaldi-lineage transfer
-  evidence; a third family (SSL-based) is future work.
+- **Full four-engine matrix** — Vosk adds Kaldi-lineage evidence in the
+  headline; Whisper small + wav2vec2-base add capacity and self-supervised
+  transfer evidence on the top-K subset only (the 147-condition × 4-engine
+  matrix was not run — cost declared); larger models (Whisper
+  medium/large, wav2vec2-large, HuBERT/WavLM) remain future work, stated
+  rather than half-implemented.

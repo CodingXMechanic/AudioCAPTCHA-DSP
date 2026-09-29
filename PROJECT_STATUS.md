@@ -4,7 +4,7 @@ Status of every WHAT-REMAINS.txt phase. Labels follow §15:
 **Implemented / Partially implemented / Experimental / Optional / Planned /
 Not validated / Not supported.**
 
-*Baseline for regression counting: 476 tests green (`pytest tests/`).*
+*Baseline for regression counting: 488 tests green (`pytest tests/`).*
 
 ---
 
@@ -16,7 +16,7 @@ Not validated / Not supported.**
 | 2 | Scientifically precise experiment model | **Implemented** | `core/signal.py`, `core/types.py`, `experiments/runner.py` (see `METHODOLOGY.md` §1) |
 | 3 | Comprehensive DSP taxonomy (A–H) | **Implemented** | `transforms/registry.py` — **119 transforms**: A 11, B 16, C 11, D 24, E 20, F 9, G 10, H 18; `TRANSFORM_CATALOG.md` (all cited) |
 | 4 | Real dataset layer | **Partially implemented (by licence)** | WSJ adapters + `scripts/prepare_wsj.py` implemented; **WSJ files not present (LDC)**; LibriSpeech stand-in labelled in manifests; `docs/BASE_PAPER_DATASET.md` |
-| 5 | Multi-ASR evaluation system | **Implemented** | Two **real independent families**: Whisper tiny + Vosk (Kaldi lineage); `IndependentASREngine` is **heuristic and excluded from headline results**; defenses in `asr/defense.py` |
+| 5 | Multi-ASR evaluation system | **Implemented** | Two **real independent families** in the headline matrix (Whisper tiny; Vosk/Kaldi lineage) plus a **four-engine transfer validation** (+ Whisper small, wav2vec2-base) on the top-K conditions; `IndependentASREngine` is **heuristic and excluded from headline results**; defenses in `asr/defense.py` |
 | 6 | Human-vs-ASR research metrics | **Implemented (human = proxy)** | `evaluation/metrics.py` (13 metrics), `evaluation/hag_metrics.py` (HSR/ASR-SR/HAG/CSS/DSR/CMFR/PRR/PAR/TRS); HSR labelled *illustrative* |
 | 7 | Fair comparison protocol | **Implemented** | `METHODOLOGY.md` §3; controls + matched-power control in every run |
 | 8 | Multi-objective transform ranking | **Implemented** | `human_rank`, `attack_rank`, `gap_rank`, `quality_rank`, `pareto` in `summary.csv`; `ranking.md` |
@@ -24,7 +24,7 @@ Not validated / Not supported.**
 | 10 | Human evaluation support | **Protocol ready; not conducted** | `captcha/generator.py::HumanStudyProtocol` (trial orders, counterbalancing, attention checks, exclusion, JSONL export) + §10 response data model in `log_response`; no participants ⇒ proxy-only HSR; `HUMAN_STUDY_PROTOCOL.md` |
 | 11 | CAPTCHA prototype layer | **Implemented** | `captcha/generator.py` (`CAPTCHAGenerator`, `CAPTCHAChallenge`, both modes; challenge IDs, expiry, verify, replay limit, rate-limit hooks, wav+sidecar artifact export, seeded reproducibility) |
 | 12 | Visualization & paper-ready reporting | **Implemented** | `scripts/make_figures.py` — **16 figures** PNG+SVG+PDF (figs 1–4 + WHAT-REMAINS §12 extended set figs 5–16, incl. heatmap/forest/confusion/spectrogram/masking/rank-stability/shelf-life; §12 coverage matrix in `PAPER_RESULTS_GUIDE.md`), `scripts/make_tables.py` (CSV+LaTeX); outputs in `results/figures`, `results/tables` |
-| 13 | Testing & quality requirements | **Implemented** | **476 tests green**; incl. 21 WSJ-protocol, 17 benchmark, 17 shelf-life (N11), 9 CAPTCHA, **6 CLI** (script entry points), Vosk adapter, registry-integrity tests |
+| 13 | Testing & quality requirements | **Implemented** | **488 tests green**; incl. 21 WSJ-protocol, 24 comparative-benchmark (4-engine registry + family-macro ΔWER), 17 shelf-life (N11), 9 CAPTCHA, **6 CLI** (script entry points), Whisper/Vosk/wav2vec2 adapters, registry-integrity tests |
 | 14 | Research safety & scientific integrity | **Implemented** | `HSR_LABEL` enforced in code, CSV, Markdown, JSON; heuristic engine tagged `heuristic_proxy`; stand-in corpus always labelled; no fabricated results |
 | 15 | Update the documentation | **Implemented** | `README.md` + this file + 13 docs listed below; per-transform citations in `TRANSFORM_CATALOG.md` |
 | 16 | Final paper contributions | **Implemented (claims drafted, evidence-gated)** | `docs/NOVELTIES.md` N1–N11 mapped to §16 (N11 = shelf-life forecasting, original contribution); only claims with artifacts retained; quantitative claims gated on `results/comparative/main` + `results/shelf_life` |
@@ -66,10 +66,11 @@ Not validated / Not supported.**
    wired (`HUMAN_STUDY_PROTOCOL.md`).
 2. **Exact WSJ corpus** — requires LDC licence; then one re-run of the same
    command with `--dataset wsj` gives bit-faithful base-paper numbers.
-3. **Third ASR family (SSL-based)** — `transformers` *is* resolvable in this
-   environment but was **not adopted** (scope decision: novelty N11
-   shelf-life forecasting chosen instead); documented as future work, not
-   half-implemented.
+3. **Full four-engine matrix** — `wav2vec2-base` and Whisper small are
+   adopted as evaluation engines in the targeted transfer-validation run
+   (top-K conditions), not in the full matrix; larger/other SSL models
+   (HuBERT, WavLM, wav2vec2-large) are **not evaluated** and are stated as
+   such rather than half-implemented.
 4. **Per-condition compute-cost column** — *Planned*; only aggregate
    throughput logged today.
 5. **Defense sweep in the headline run** — *Optional/on-demand* (6× ASR

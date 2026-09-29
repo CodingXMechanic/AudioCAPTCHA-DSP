@@ -43,7 +43,7 @@ published — never silently drop rows.
 | `snr_mean, mbsd_mean, si_sdr_mean` | fidelity/quality axis (finite values only) |
 | `wer_<engine>_mean` | absolute WER per engine |
 | `wer_<engine>_delta` | ΔWER vs that engine's `original` baseline |
-| `cross_delta_wer` | **attack axis** = mean ΔWER over engines |
+| `cross_delta_wer` | **attack axis** = mean ΔWER over the run's independent engines (family-macro when one family has >1 engine) |
 | `hsr, asr_sr, hag, css` | SecurityEvaluator outputs (HSR = illustrative proxy) |
 | `human_rank` / `attack_rank` / `gap_rank` / `quality_rank` | WHAT-REMAINS §8 views |
 | `pareto` | nondominated on (STOI, cross-ΔWER) |
@@ -151,7 +151,7 @@ Retain a claim only with its evidence column:
 | 4. Cross-model & defense-aware analysis | evidence: `fig3`; defense metrics implemented (defense sweep optional) |
 | 5. Multi-objective ranking/Pareto | evidence: rank columns + `fig1` |
 | 6. Psychoacoustically constrained family + separation vs control | evidence: λ-sweep + control rows |
-| 7. Phonetic/representation-level explanation | partial: phoneme-guided transform + phone-rate protocol; SSL axis *not supported* (drop or mark future work) |
+| 7. Phonetic/representation-level explanation | partial: phoneme-guided transform + phone-rate protocol; representation axis via the 4-engine transfer validation (SSL *attack* feature space, paper 7, still out of scope) |
 | 8. Reproducible artifact & manifest standard | evidence: manifests + resume + full test suite |
 | 9. **Shelf-life forecasting (novelty N11, beyond §16)** | evidence: `results/shelf_life/shelf_life.{json,md}` + `fig16` + `test_shelf_life.py` |
 

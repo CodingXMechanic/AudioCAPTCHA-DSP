@@ -34,11 +34,16 @@ Pareto flags per condition is not provided by any of them.
 Whisper models; paper 7 attacks SSL feature extractors; the base paper (11)
 evaluates only its white-box Kaldi DNN. Whether *threshold-shaped*
 (imperceptible) noise transfers across **architecturally independent**
-families (attention encoder-decoder vs. Kaldi nnet3) is unexamined.
+families — attention encoder-decoder vs. Kaldi nnet3 vs. self-supervised
+CTC — is unexamined.
 
-**Ours:** every condition is transcribed by Whisper tiny **and** Vosk
-(Kaldi lineage); the headline attack metric is the **mean ΔWER across both
-families**, and transfer scatter is a first-class figure.
+**Ours:** every condition in the full matrix is transcribed by Whisper tiny
+**and** Vosk (Kaldi lineage) — two genuinely independent families — and the
+top-8 attacks (plus the matched-power control, a benign condition and
+`original`) are re-evaluated on **four engines**, adding Whisper small
+(capacity) and wav2vec2-base (self-supervised). The headline attack metric
+is the **mean ΔWER across families** (family-macro when one family has two
+sizes), and transfer scatter is a first-class figure.
 **Artifact:** `fig3_cross_family_transfer.*`, `cross_delta_wer` column.
 
 ## N4. Matched-power unconstrained control ("None" done rigorously)
@@ -144,8 +149,8 @@ a *shelf life* instead of a boolean.
 **Honesty contract:** fits use only 3 ladder points (df = 1); doubling rates
 are stated scenarios, not measured trends; the human axis is the
 STOI-derived illustrative proxy (no human study); other ASR families
-(Vosk) are reported only as out-of-family markers, never mixed into the
-scaling axis.
+(e.g. Vosk) are reported only as out-of-family markers, never mixed into
+the scaling axis.
 
 **Artifact:** `experiments/shelf_life.py`, `scripts/run_shelf_life.py`,
 `results/shelf_life/` (`rows.csv`, `shelf_life.{json,md}`, manifests),

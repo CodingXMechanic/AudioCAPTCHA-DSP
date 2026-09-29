@@ -1,22 +1,46 @@
 # ASR Models
 
 Evaluation engines for the ASR axis. The core design goal versus the base
-paper (single white-box Kaldi DNN-HMM) is **three genuinely independent
-families**, so that "attack success" means *black-box transfer*, not
-overfitting to one recognizer.
+paper (single white-box Kaldi DNN-HMM) is **independent ASR families**, so
+that "attack success" means *black-box transfer*, not overfitting to one
+recognizer.
 
 ---
 
 ## 1. Engines used in headline results
 
+The headline matrix (`results/comparative/main`: 147 conditions × 70
+utterances) is evaluated on **two genuinely independent families**:
+
 | Engine id | Model | Family / lineage | Type | Weights |
 |---|---|---|---|---|
 | `whisper_tiny` | openai-whisper **tiny** (39 M) | Attention encoder-decoder | **real** | `~/.cache/whisper/tiny.pt` (auto-download) |
-| `whisper_small` | openai-whisper **small** (244 M) | Attention encoder-decoder (same family as tiny, larger scale point) | **real** | `~/.cache/whisper/small.pt` (auto-download) |
 | `vosk_small_en` | **vosk-model-small-en-us-0.15** (~40 MB) | **Kaldi nnet3** — same toolkit lineage as the base paper's WSJ-recipe DNN-HMM | **real** | `data/raw/vosk/vosk-model-small-en-us-0.15` |
-| `wav2vec2_base` | **facebook/wav2vec2-base-960h** (95 M) | **Self-supervised** (wav2vec 2.0) encoder + CTC head — the family of the SSL papers in the survey | **real** | `~/.cache/huggingface/hub/models--facebook--wav2vec2-base-960h` (via the optional `ssl` extra: `pip install -e ".[ssl]"`) |
 
-All engines:
+These two are the defaults (`DEFAULT_ENGINES`), so the documented benchmark
+command reproduces the headline table as-is.
+
+### Transfer-validation engines (top-K subset)
+
+The targeted run `results/comparative/engine_validation` extends the same
+protocol to **four engines** for exactly the conditions the paper discusses
+— the top-8 attacks by cross-ΔWER, the matched-power control, a benign
+near-null condition (`baseline.loudness_normalize`) and `original`
+(11 conditions × 70 utterances, no λ-sweep):
+
+| Engine id | Model | Family / lineage | Weights |
+|---|---|---|---|
+| `whisper_small` | openai-whisper **small** (244 M) | Attention encoder-decoder (same family as tiny, larger scale point) | `~/.cache/whisper/small.pt` (auto-download) |
+| `wav2vec2_base` | **facebook/wav2vec2-base-960h** (95 M) | **Self-supervised** (wav2vec 2.0) encoder + CTC head — the family of the SSL papers in the survey | `~/.cache/huggingface/hub/models--facebook--wav2vec2-base-960h` (optional `ssl` extra: `pip install -e ".[ssl]"`) |
+
+Selected explicitly with
+`--asr whisper_tiny,vosk_small_en,whisper_small,wav2vec2_base`. It answers
+one question: *do the headline attacks transfer to a larger attention model
+and to an SSL model whose pretraining never saw transcripts?* The full
+147-condition × 4-engine matrix was **not** run (≈ 35 h on this hardware) —
+declared as a limitation, never implied.
+
+All four engines:
 
 - transcribe any `Signal` (mono conversion + resample to 16 kHz inside the
   adapter — 44.1 kHz inputs verified);
@@ -33,32 +57,35 @@ All engines:
 The base paper's ASR was the default Kaldi WSJ recipe. Vosk's small English
 model is Kaldi-lineage (nnet3 + lattice decoding), i.e. a *modern relative of
 the paper's own recognizer*. Cross-family results therefore read as
-"attention-based ↔ Kaldi-lineage ↔ self-supervised" transfer, which brackets
-the paper's setup from both sides.
+"attention-based ↔ Kaldi-lineage" transfer in the headline, extended to
+"↔ self-supervised" in the validation run — bracketing the paper's setup
+from both sides.
 
 ### Why wav2vec2
 
-The survey's self-supervised papers (Wav2Vec2/BYOL-A/HuBERT lineage) were
-cited but never evaluated — the one-sidedness `LIMITATIONS.md` flagged. Adding
-wav2vec2-base turns the comparison into a three-family design: a
-supervised attention model, a Kaldi-lineage hybrid, and an SSL model whose
-pretraining objective never saw transcripts. Whisper tiny **and** small
-provide the within-family scale point (244 M vs 39 M) so robustness gains
-from capacity are visible instead of confounded with architecture.
+The survey's self-supervised papers (wav2vec 2.0 / HuBERT lineage) were
+cited but never evaluated — the one-sidedness `LIMITATIONS.md` flagged.
+wav2vec2-base carries that family in the validation run, turning the
+transfer question into a three-architecture comparison: a supervised
+attention model, a Kaldi-lineage hybrid, and an SSL model. Whisper tiny
+**and** small supply the within-family scale point (244 M vs 39 M) so
+robustness gains from capacity are visible instead of confounded with
+architecture.
 
 ### Headline metric
 
 ```
-family_delta(f) = mean over engines f of ( WER(condition) − WER(original) )
-cross_delta_wer = mean over families f of family_delta(f)
+delta(e)        = WER(condition, e) − WER(original, e)      per engine e
+cross_delta_wer = mean over the engines evaluated in the run
 ```
 
-Families: `whisper` (tiny + small), `kaldi` (vosk), `ssl` (wav2vec2). Each
-lineage therefore weighs exactly once — an attack that fools only Whisper at
-both sizes cannot outrank one that hurts all three families. This is the
-`attack_rank` ordering key (`_macro_family_delta` /
-`asr_family_groups` in `experiments/comparative.py`; `scripts/make_figures.py`
-mirrors the same rule for per-utterance deltas).
+For the headline that is the plain mean over the two independent families —
+the `attack_rank` ordering key. When a run measures one family at more than
+one size (the four-engine validation), the rule is the **family
+macro-average**: engines of a lineage are averaged first, then the family
+means are averaged (`_macro_family_delta` / `asr_family_groups` in
+`experiments/comparative.py`; `scripts/make_figures.py` mirrors it for
+per-utterance deltas), so Whisper at two sizes cannot outweigh Kaldi or SSL.
 
 ---
 
@@ -69,7 +96,7 @@ mirrors the same rule for per-utterance deltas).
 | `IndependentASREngine` (`asr/engine.py`) | **Heuristic, metadata-driven** — WER is a function of `signal.metadata`, audio content is never recognized | Tagged `asr_kind: heuristic_proxy` in manifests; **excluded from ΔWER/headline claims**; retained only as a deterministic plumbing test double |
 | `MockASREngine` | Test double | Tests/CI only |
 | Whisper `base` | Same family as tiny/small | Used only as the shelf-life capacity-ladder middle rung (`experiments/shelf_life.py`), not in the headline benchmark |
-| HuBERT / WavLM / wav2vec2-large | Same SSL family at other scales | **Not evaluated** — documented residual in `LIMITATIONS.md` (`wav2vec2-base` carries the SSL family in the headline) |
+| HuBERT / WavLM / wav2vec2-large | Same SSL family at other scales | **Not evaluated** — documented residual in `LIMITATIONS.md` (`wav2vec2-base` carries the SSL family in the validation run) |
 | Kaldi DNN-HMM (exact paper model) | The paper's white-box ASR | Requires WSJ training recipe + corpus; Vosk stands in as the Kaldi-lineage family (`scripts/prepare_wsj.py --build-kaldi` unlocks the exact path) |
 
 ## 3. Defenses (evaluated preprocessors, not ASR engines)
@@ -100,7 +127,9 @@ class MyAdapter(ASREngine):
 Register the adapter in `asr/__init__.py`, then add its id to `ASR_LABELS`
 (family label + `group` for the macro-average) and to the `_make_engine`
 factory in `comparative.py`; `ROW_FIELDS` (`wer_<id>` / `hyp_<id>` columns)
-and the default engine list are derived from that single registry. Required:
+are derived from that single registry. `DEFAULT_ENGINES` (the two-family
+headline) and any explicit `--asr` list (e.g. the four-engine validation
+set) are both drawn from it. Required:
 `kind: real` must be earned — the heuristic engine's exclusion rule exists
 because metadata-driven WER must never look like recognition. Resume safety:
 `rows.csv` produced with one engine set cannot be continued with another

@@ -45,12 +45,16 @@ independent ASR families?**
 - *Why it matters:* the base paper is white-box (Kaldi DNN-HMM only);
   paper 6 transfers *gradient* attacks within Whisper; neither examines
   imperceptible noise across architectures.
-- *Operationalization:* every utterance is transcribed by **Whisper tiny**
-  (attention encoder-decoder) and **Vosk small-en** (Kaldi nnet3 — the base
-  paper's toolkit lineage); the headline attack metric is the mean ΔWER over
-  both families; transfer is plotted against the y = x reference.
-- *Status:* **Implemented** — `asr/whisper_adapter.py`, `asr/vosk_adapter.py`;
-  `fig3_cross_family_transfer.*`.
+- *Operationalization:* every utterance in the full matrix is transcribed
+  by **Whisper tiny** (attention encoder-decoder) and **Vosk small-en**
+  (Kaldi nnet3 — the base paper's toolkit lineage); the top-8 attacks
+  (+ control, benign, `original`) are additionally transcribed by
+  **Whisper small** and **wav2vec2-base** (self-supervised CTC) in the
+  transfer-validation run; the headline attack metric is the mean ΔWER
+  across the independent families (family-macro when a family has two
+  sizes), and transfer is plotted against the y = x reference.
+- *Status:* **Implemented** — `asr/whisper_adapter.py`, `asr/vosk_adapter.py`,
+  `asr/wav2vec2_adapter.py`; `fig3_cross_family_transfer.*`.
 
 ## RQ4 — Margin sensitivity (λ-sweep)
 

@@ -26,7 +26,8 @@ preserved as given.)*
 - We improve: their perturbations are unbounded (no hearing-threshold
   budget) — we constrain *every* candidate with psychoacoustic budgets and
   quantify imperceptibility (STOI/MBSD/SNR) per condition; we also test
-  **two independent ASR families** (N3) rather than one model class.
+  **independent ASR families** — two in the full matrix, four engines in
+  the transfer-validation run (N3) rather than one model class.
 
 **Paper 3 — "Constructing Secure Audio CAPTCHAs…", CCS 2016**
 - Gives: foundational human-vs-machine gap design principle.
@@ -128,11 +129,15 @@ preserved as given.)*
 than Semantic**
 - Adopt: the phonetic-dominance explanation motivating our phoneme-granular
   transforms and the choice of a *Kaldi-lineage* second ASR (phonetic
-  bias) to complement Whisper.
-- We improve: we do not ship a half-integrated SSL engine; the independent
-  engine we do ship is a real recognizer (Vosk), unlike the heuristic
-  `IndependentASREngine`, which is excluded from headline results and
-  labelled as such.
+  bias) to complement Whisper — plus wav2vec 2.0 itself as a third
+  evaluation family in the transfer-validation run, so the transfer claim
+  on the paper's top-ranked conditions spans attention, Kaldi-hybrid and
+  SSL architectures.
+- We improve: the SSL family is carried by a *real* engine
+  (`wav2vec2-base`, greedy CTC decoding, cached weights, hard error on a
+  missing dependency) rather than a half-integrated stub; the heuristic
+  `IndependentASREngine` stays excluded from headline results and labelled
+  as such.
 
 ### Section F — Deepfake detection
 

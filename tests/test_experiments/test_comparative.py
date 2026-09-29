@@ -268,8 +268,10 @@ class TestEngineRegistry:
     """Four registered engines: Whisper (tiny + small), Vosk/Kaldi, wav2vec2."""
 
     def test_row_fields_cover_every_registered_engine(self) -> None:
-        assert DEFAULT_ENGINES == list(ASR_LABELS)
-        assert set(DEFAULT_ENGINES) == {
+        # headline default = the two-family paper matrix
+        assert DEFAULT_ENGINES == ["whisper_tiny", "vosk_small_en"]
+        # four engines remain registered for the validation run
+        assert set(ASR_LABELS) == {
             "whisper_tiny", "whisper_small", "vosk_small_en", "wav2vec2_base",
         }
         for eid in ASR_LABELS:
@@ -322,14 +324,15 @@ class TestEngineRegistry:
         rows_path = tmp_path / "rows.csv"
         # same engine set -> resume allowed
         _check_engine_set(rows_path, ["whisper_tiny", "vosk_small_en"])
-        # requesting more engines -> explicit refusal, not a silent mix
+        # requesting the extended four-engine set -> explicit refusal,
+        # not a silent mix
         with pytest.raises(RuntimeError, match="engine set"):
-            _check_engine_set(rows_path, DEFAULT_ENGINES)
+            _check_engine_set(rows_path, list(ASR_LABELS))
         # and run_benchmark stops before touching dataset or ASR
         with pytest.raises(RuntimeError, match="engine set"):
-            run_benchmark(out_dir=tmp_path, engines=DEFAULT_ENGINES)
+            run_benchmark(out_dir=tmp_path, engines=list(ASR_LABELS))
         # nothing written yet -> nothing to check
-        _check_engine_set(tmp_path / "absent.csv", DEFAULT_ENGINES)
+        _check_engine_set(tmp_path / "absent.csv", list(ASR_LABELS))
 
 
 class TestAggregateFourEngines:

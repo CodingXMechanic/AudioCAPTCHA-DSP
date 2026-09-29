@@ -2,11 +2,12 @@
 
 wav2vec 2.0 (Baevski et al., NeurIPS 2020; papers 19-21 of the survey) is a
 self-supervised speech representation model with a CTC head fine-tuned on
-LibriSpeech.  As an evaluation engine it adds a *third* architecture to the
-benchmark alongside Whisper (attention encoder-decoder) and Vosk (Kaldi
-nnet3): a convolutional feature encoder + Transformer encoder decoding with
-connectionist temporal classification.  Cross-family transfer claims are
-therefore no longer a two-family comparison.
+LibriSpeech.  In the targeted transfer-validation run it adds a *third*
+architecture to the benchmark alongside Whisper (attention encoder-decoder)
+and Vosk (Kaldi nnet3): a convolutional feature encoder + Transformer
+encoder decoding with connectionist temporal classification, so the
+cross-family transfer claim on the top-ranked conditions spans attention,
+Kaldi-lineage and SSL models.
 
 Model
 -----

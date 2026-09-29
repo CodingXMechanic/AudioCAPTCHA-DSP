@@ -25,15 +25,16 @@ Research-complete pipeline:
   (70 utterances/10 speakers; 72 speech + 70 music; 150 speech + 72 music,
   ≤6 phones/s) with Kaldi + raw-LDC adapters and full run manifests —
   see [`docs/BASE_PAPER_DATASET.md`](docs/BASE_PAPER_DATASET.md).
-- **Multi-ASR evaluation** with three *real, independent* families:
-  Whisper tiny + small (attention encoder-decoder, two sizes),
-  Vosk small-en (Kaldi nnet3 — the base paper's toolkit lineage) and
-  wav2vec 2.0 base (self-supervised, CTC head).
+- **Multi-ASR evaluation** with two *real, independent* families in the
+  full matrix — Whisper tiny (attention encoder-decoder) and Vosk small-en
+  (Kaldi nnet3 — the base paper's toolkit lineage) — plus a **four-engine
+  transfer validation** (adding Whisper small and self-supervised
+  wav2vec 2.0) on the top-ranked attack conditions.
 - **Human-vs-ASR metrics**: STOI proxy, MBSD, SNR/SI-SDR, WER per engine,
-  cross-family ΔWER (family-macro average), and the HSR/HAG stack — human
-  numbers are always labelled *illustrative* (no human study has been
-  conducted).
-- **487 tests** green (`pytest tests/`).
+  cross-family ΔWER (family-macro when one family has two sizes), and the
+  HSR/HAG stack — human numbers are always labelled *illustrative* (no
+  human study has been conducted).
+- **488 tests** green (`pytest tests/`).
 
 ## Setup
 
@@ -66,7 +67,7 @@ make test
 
 ```bash
 # Headline run: base-paper subset-A protocol (70 utterances / 10 speakers),
-# curated transforms + λ-sweep mirror, all 4 engines, resumable:
+# curated transforms + λ-sweep mirror, Whisper + Vosk, resumable:
 python scripts/run_comparative_benchmark.py --out results/comparative/main
 
 # Full catalog (all 119 transforms) - re-run to resume after interruption:
@@ -100,7 +101,7 @@ transfer, family summary) as PNG+SVG; tables as CSV + LaTeX (booktabs).
 | [`METHODOLOGY.md`](METHODOLOGY.md) | Experiment model, fair-comparison protocol, axes, statistics |
 | [`TRANSFORM_CATALOG.md`](TRANSFORM_CATALOG.md) | All 119 transforms w/ scientific basis (generated) |
 | [`DATASETS.md`](DATASETS.md) | Corpus adapters, subset protocol, manifests |
-| [`ASR_MODELS.md`](ASR_MODELS.md) | Three real ASR families (four engines); heuristic engine policy |
+| [`ASR_MODELS.md`](ASR_MODELS.md) | Two real ASR families (headline matrix) + 4-engine transfer validation; heuristic engine policy |
 | [`METRICS.md`](METRICS.md) | Fidelity/quality/ASR/human/security metric inventory |
 | [`STATISTICAL_ANALYSIS.md`](STATISTICAL_ANALYSIS.md) | CIs, effect sizes, tests, corrections |
 | [`HUMAN_STUDY_PROTOCOL.md`](HUMAN_STUDY_PROTOCOL.md) | Listener-study design; label-retirement criteria |
