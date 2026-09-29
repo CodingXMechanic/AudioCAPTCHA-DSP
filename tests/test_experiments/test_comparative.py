@@ -16,15 +16,22 @@ import pytest
 
 from audiocaptcha_dsp.core.signal import Signal
 from audiocaptcha_dsp.experiments.comparative import (
+    ASR_LABELS,
     CONTROL_ID,
+    DEFAULT_ENGINES,
     ORIGINAL_ID,
     ROW_FIELDS,
     SWEEP_MARGINS_DB,
     SWEEP_TARGETS,
+    _check_engine_set,
     _is_nondominated,
+    _make_engine,
+    _macro_family_delta,
     aggregate_results,
     apply_no_threshold_control,
+    asr_family_groups,
     build_conditions,
+    run_benchmark,
     select_samples,
     write_dataset_manifest,
 )
@@ -242,7 +249,8 @@ def _write_rows(out_dir: Path, rows: list[dict]) -> Path:
     return p
 
 
-def _row(cid, kind, key, fam, utt, stoi, snr, w1, w2, margin="", params="{}"):
+def _row(cid, kind, key, fam, utt, stoi, snr, w1, w2, margin="", params="{}",
+         w_small="", w_wav2vec=""):
     return {
         "condition_id": cid, "kind": kind, "transform_key": key,
         "family": fam, "params_json": params, "margin_db": margin,
@@ -250,8 +258,118 @@ def _row(cid, kind, key, fam, utt, stoi, snr, w1, w2, margin="", params="{}"):
         "error": "", "snr_db": snr, "stoi_proxy": stoi, "mbsd": 1.0,
         "si_sdr_db": snr, "rms_ratio": 1.0, "ref_text": "some words here",
         "wer_whisper_tiny": w1, "wer_vosk_small_en": w2,
+        "wer_whisper_small": w_small, "wer_wav2vec2_base": w_wav2vec,
         "hyp_whisper_tiny": "", "hyp_vosk_small_en": "",
+        "hyp_whisper_small": "", "hyp_wav2vec2_base": "",
     }
+
+
+class TestEngineRegistry:
+    """Four registered engines: Whisper (tiny + small), Vosk/Kaldi, wav2vec2."""
+
+    def test_row_fields_cover_every_registered_engine(self) -> None:
+        assert DEFAULT_ENGINES == list(ASR_LABELS)
+        assert set(DEFAULT_ENGINES) == {
+            "whisper_tiny", "whisper_small", "vosk_small_en", "wav2vec2_base",
+        }
+        for eid in ASR_LABELS:
+            assert f"wer_{eid}" in ROW_FIELDS
+            assert f"hyp_{eid}" in ROW_FIELDS
+
+    def test_family_groups(self) -> None:
+        groups = asr_family_groups()
+        assert set(groups) == {"whisper", "kaldi", "ssl"}
+        assert groups["whisper"] == ["whisper_tiny", "whisper_small"]
+        assert groups["kaldi"] == ["vosk_small_en"]
+        assert groups["ssl"] == ["wav2vec2_base"]
+        # a partial engine list keeps only the requested engines
+        assert asr_family_groups(["whisper_small"]) == {
+            "whisper": ["whisper_small"],
+        }
+
+    def test_macro_family_delta(self) -> None:
+        # one engine per family -> plain mean (back-compatible with 2 engines)
+        two = {"wer_whisper_tiny": 0.5, "wer_vosk_small_en": 0.3}
+        assert _macro_family_delta(two) == pytest.approx(0.4)
+        # Whisper measured at two sizes must not outweigh the other families
+        four = {"wer_whisper_tiny": 0.6, "wer_whisper_small": 0.2,
+                "wer_vosk_small_en": 0.3, "wer_wav2vec2_base": 0.1}
+        whisper_mean = (0.6 + 0.2) / 2
+        assert _macro_family_delta(four) == pytest.approx(
+            (whisper_mean + 0.3 + 0.1) / 3
+        )
+        assert math.isnan(_macro_family_delta({}))
+
+    def test_make_engine_and_unknown_rejected(self) -> None:
+        small = _make_engine("whisper_small")
+        assert small.name == "whisper_small"
+        assert small.model_size == "small"
+        with pytest.raises(ValueError, match="unknown ASR engine"):
+            _make_engine("gpt4_voice")
+
+    def test_run_benchmark_rejects_unknown_engine(self, tmp_path: Path) -> None:
+        # validation happens before any dataset/transform work
+        with pytest.raises(ValueError, match="unknown ASR engine"):
+            run_benchmark(out_dir=tmp_path, engines=["gpt4_voice"])
+
+    def test_engine_set_mismatch_refused(self, tmp_path: Path) -> None:
+        """Rows produced by one engine set may not be resumed with another."""
+        # rows.csv from a two-engine run (small/wav2vec2 cells empty)
+        _write_rows(tmp_path, [
+            _row(ORIGINAL_ID, "original", "baseline.identity", "-",
+                 "u0", 1.0, "", 0.1, 0.2),
+        ])
+        rows_path = tmp_path / "rows.csv"
+        # same engine set -> resume allowed
+        _check_engine_set(rows_path, ["whisper_tiny", "vosk_small_en"])
+        # requesting more engines -> explicit refusal, not a silent mix
+        with pytest.raises(RuntimeError, match="engine set"):
+            _check_engine_set(rows_path, DEFAULT_ENGINES)
+        # and run_benchmark stops before touching dataset or ASR
+        with pytest.raises(RuntimeError, match="engine set"):
+            run_benchmark(out_dir=tmp_path, engines=DEFAULT_ENGINES)
+        # nothing written yet -> nothing to check
+        _check_engine_set(tmp_path / "absent.csv", DEFAULT_ENGINES)
+
+
+class TestAggregateFourEngines:
+    """Headline cross-ΔWER is a macro-average over ASR families."""
+
+    @pytest.fixture()
+    def run_dir(self, tmp_path: Path) -> Path:
+        rows = []
+        for i in range(4):
+            rows.append(_row(
+                ORIGINAL_ID, "original", "baseline.identity", "-",
+                f"u{i}", 1.0, "", 0.10, 0.20, w_small="0.05",
+                w_wav2vec="0.02",
+            ))
+            rows.append(_row(
+                "attack.x", "transform", "attack.x", "G",
+                f"u{i}", 0.88, 8.0, 0.60, 0.50, w_small="0.15",
+                w_wav2vec="0.12",
+            ))
+        _write_rows(tmp_path, rows)
+        return tmp_path
+
+    def test_cross_delta_is_family_macro(self, run_dir: Path) -> None:
+        csv_path = aggregate_results(run_dir, log=lambda *a: None)
+        import pandas as pd
+
+        s = pd.read_csv(csv_path).set_index("condition_id")
+        a = s.loc["attack.x"]
+        # per-engine deltas: tiny .50, small .10, vosk .30, wav2vec2 .10
+        assert a.wer_whisper_tiny_delta == pytest.approx(0.50)
+        assert a.wer_whisper_small_delta == pytest.approx(0.10)
+        assert a.wer_wav2vec2_base_delta == pytest.approx(0.10)
+        whisper_family = (0.50 + 0.10) / 2
+        assert a.cross_delta_wer == pytest.approx(
+            (whisper_family + 0.30 + 0.10) / 3
+        )
+        # ranking.md names every engine and the three families
+        md = (run_dir / "ranking.md").read_text(encoding="utf-8")
+        assert "ΔWER whisper small" in md
+        assert "3 independent families" in md
 
 
 class TestAggregate:

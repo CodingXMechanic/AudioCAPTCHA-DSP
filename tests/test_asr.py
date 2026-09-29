@@ -146,3 +146,103 @@ class TestVoskAdapter:
         )
         res = adapter.transcribe(sig)  # must not raise
         assert isinstance(res.text, str)
+
+
+def _transformers_available() -> bool:
+    import importlib.util
+
+    return importlib.util.find_spec("transformers") is not None
+
+
+def _wav2vec2_weights_available() -> bool:
+    """Weights cached under the Hugging Face hub cache (no download in CI)."""
+    from pathlib import Path
+
+    return (Path.home() / ".cache" / "huggingface" / "hub"
+            / "models--facebook--wav2vec2-base-960h").exists()
+
+
+class TestWav2Vec2Adapter:
+    """Self-supervised (SSL) family — the benchmark's third ASR lineage."""
+
+    def test_registered_name_and_ctc_cleaning(self) -> None:
+        from audiocaptcha_dsp.asr import Wav2Vec2Adapter
+        from audiocaptcha_dsp.asr.wav2vec2_adapter import clean_ctc_text
+
+        assert Wav2Vec2Adapter().name == "wav2vec2_base"
+        # "|" is the word delimiter in the wav2vec2 vocabulary
+        assert clean_ctc_text("HE|HOPED|THERE") == "HE HOPED THERE"
+        assert clean_ctc_text("no|delimiter") == "no delimiter"
+
+    def test_missing_transformers_raises_instead_of_falling_back(
+        self, monkeypatch
+    ) -> None:
+        """A benchmark engine must fail loudly, never degrade silently."""
+        import sys
+
+        from audiocaptcha_dsp.asr import Wav2Vec2Adapter
+
+        monkeypatch.setitem(sys.modules, "transformers", None)
+        adapter = Wav2Vec2Adapter()
+        with pytest.raises(RuntimeError, match="transformers"):
+            adapter.load()
+        assert adapter._model is None
+
+    @pytest.mark.skipif(
+        not (_transformers_available() and _wav2vec2_weights_available()),
+        reason="wav2vec2 weights not cached (CI must not download models)",
+    )
+    def test_loads_with_cached_weights(self) -> None:
+        """Model-only load path (runs in the CI full job, needs no corpus)."""
+        from audiocaptcha_dsp.asr import Wav2Vec2Adapter
+
+        adapter = Wav2Vec2Adapter()
+        adapter.load()
+        assert adapter._model is not None
+
+    @pytest.mark.skipif(
+        not (_transformers_available() and _wav2vec2_weights_available()),
+        reason="wav2vec2 weights not cached (CI must not download models)",
+    )
+    def test_transcribes_clean_speech_deterministically(self) -> None:
+        from pathlib import Path
+
+        import soundfile as sf
+
+        from audiocaptcha_dsp.asr import Wav2Vec2Adapter
+
+        files = sorted(
+            (Path(__file__).resolve().parents[1]
+             / "data/raw/LibriSpeech/test-clean").glob("*/*/*.flac")
+        )
+        if not files:
+            pytest.skip("LibriSpeech test-clean not present")
+        wav, sr = sf.read(str(files[0]), dtype="float32")
+        adapter = Wav2Vec2Adapter()
+        res = adapter.transcribe(Signal(waveform=wav, sample_rate=sr))
+        assert len(res.text.split()) >= 3  # real recognizer, not a stub
+        assert res.confidence is not None and 0.0 < res.confidence <= 1.0
+        again = adapter.transcribe(Signal(waveform=wav, sample_rate=sr))
+        assert again.text == res.text  # greedy CTC decoding is deterministic
+
+    @pytest.mark.skipif(
+        not (_transformers_available() and _wav2vec2_weights_available()),
+        reason="wav2vec2 weights not cached (CI must not download models)",
+    )
+    def test_resamples_non_16k_input(self) -> None:
+        from pathlib import Path
+
+        import soundfile as sf
+
+        from audiocaptcha_dsp.asr import Wav2Vec2Adapter
+
+        files = sorted(
+            (Path(__file__).resolve().parents[1]
+             / "data/raw/LibriSpeech/test-clean").glob("*/*/*.flac")
+        )
+        if not files:
+            pytest.skip("LibriSpeech test-clean not present")
+        wav, sr = sf.read(str(files[0]), dtype="float32")
+        adapter = Wav2Vec2Adapter()
+        res = adapter.transcribe(Signal(waveform=wav, sample_rate=44100))
+        assert isinstance(res.text, str)  # resample path must not raise

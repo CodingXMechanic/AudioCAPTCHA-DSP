@@ -5,11 +5,13 @@ Ranks every registered transform (families A–H) on two axes:
 * **Human-intelligibility axis** — STOI proxy (honest, signal-based) and the
   SecurityEvaluator HSR (**labelled illustrative**: it is STOI-derived, no
   human study has been conducted).
-* **ASR-effectiveness axis** — WER increase on *two genuinely independent
-  ASR families*: OpenAI Whisper tiny (attention encoder-decoder) and Vosk
-  small-en (Kaldi nnet3 lineage — the same toolkit family as the base
-  paper's white-box DNN-HMM).  Cross-family delta-WER is the headline
-  attack metric.
+* **ASR-effectiveness axis** — WER increase on *three genuinely independent
+  ASR families*: OpenAI Whisper tiny + small (attention encoder-decoder,
+  two sizes of one family), Vosk small-en (Kaldi nnet3 lineage — the same
+  toolkit family as the base paper's white-box DNN-HMM) and wav2vec 2.0
+  base (self-supervised encoder, CTC head).  The headline attack metric is
+  the family-macro average of cross-family delta-WER, so each lineage
+  weighs exactly once regardless of how many sizes it is measured at.
 
 Dataset fidelity (see docs/BASE_PAPER_DATASET.md): the sample selection
 reuses ``WSJAdapter.load_base_paper_subset`` — the exact base-paper
@@ -61,14 +63,29 @@ ASR_LABELS: dict[str, dict[str, str]] = {
     "whisper_tiny": {
         "model": "openai-whisper tiny",
         "family": "Whisper (attention encoder-decoder)",
+        "group": "whisper",
+        "kind": "real",
+    },
+    "whisper_small": {
+        "model": "openai-whisper small",
+        "family": "Whisper (attention encoder-decoder)",
+        "group": "whisper",
         "kind": "real",
     },
     "vosk_small_en": {
         "model": "vosk-model-small-en-us-0.15",
         "family": "Vosk/Kaldi nnet3 (lineage of the base paper's DNN-HMM toolkit)",
+        "group": "kaldi",
+        "kind": "real",
+    },
+    "wav2vec2_base": {
+        "model": "facebook/wav2vec2-base-960h",
+        "family": "wav2vec 2.0 (self-supervised, CTC head)",
+        "group": "ssl",
         "kind": "real",
     },
 }
+DEFAULT_ENGINES = list(ASR_LABELS)
 
 DEFAULT_TRANSFORMS = [
     "noise.white", "noise.babble", "noise.pink", "noise.band_limited",
@@ -110,9 +127,43 @@ ROW_FIELDS = [
     "condition_id", "kind", "transform_key", "family", "params_json",
     "margin_db", "utt_id", "spk", "dur_s", "status", "error",
     "snr_db", "stoi_proxy", "mbsd", "si_sdr_db", "rms_ratio", "ref_text",
-    "wer_whisper_tiny", "wer_vosk_small_en",
-    "hyp_whisper_tiny", "hyp_vosk_small_en",
+    *[f"wer_{eid}" for eid in ASR_LABELS],
+    *[f"hyp_{eid}" for eid in ASR_LABELS],
 ]
+
+
+def asr_family_groups(
+    engines: list[str] | None = None,
+) -> dict[str, list[str]]:
+    """Group engine ids by ASR lineage (``whisper`` / ``kaldi`` / ``ssl``).
+
+    The headline cross-ΔWER macro-averages over these groups, so a family
+    evaluated at two model sizes (Whisper tiny + small) does not outweigh a
+    family evaluated once.  Unknown ids fall back to a group of their own.
+    """
+    groups: dict[str, list[str]] = {}
+    for eid in (engines if engines is not None else list(ASR_LABELS)):
+        group = ASR_LABELS.get(eid, {}).get("group", eid)
+        groups.setdefault(group, []).append(eid)
+    return groups
+
+
+def _macro_family_delta(deltas: dict[str, float]) -> float:
+    """Macro-average per-engine ΔWER over ASR families.
+
+    ``deltas`` maps ``wer_<engine>`` columns to their ΔWER.  Engines of one
+    lineage (Whisper tiny + small) are averaged first, then the family
+    means are averaged — each independent family therefore weighs exactly
+    once, and with one engine per family this equals the plain mean.
+    """
+    if not deltas:
+        return float("nan")
+    engine_ids = [c.removeprefix("wer_") for c in deltas]
+    family_means = [
+        float(np.mean([deltas[f"wer_{e}"] for e in members]))
+        for members in asr_family_groups(engine_ids).values()
+    ]
+    return float(np.mean(family_means))
 
 
 # --------------------------------------------------------------------------
@@ -376,7 +427,7 @@ def _package_versions() -> dict[str, str]:
 
     out: dict[str, str] = {}
     for name in ("numpy", "scipy", "pandas", "torch", "whisper", "vosk",
-                 "jiwer", "librosa", "soundfile"):
+                 "jiwer", "librosa", "soundfile", "transformers"):
         try:
             mod = importlib.import_module(name)
             out[name] = getattr(mod, "__version__", "unknown")
@@ -391,6 +442,25 @@ def _package_versions() -> dict[str, str]:
 _G: dict[str, Any] = {}
 
 
+def _make_engine(name: str) -> Any:
+    """Instantiate one registered ASR engine by id (see ``ASR_LABELS``)."""
+    if name.startswith("whisper_"):
+        from audiocaptcha_dsp.asr import WhisperAdapter
+
+        return WhisperAdapter(
+            model_size=name.split("_", 1)[1], offline_fallback=False
+        )
+    if name == "vosk_small_en":
+        from audiocaptcha_dsp.asr import VoskAdapter
+
+        return VoskAdapter(offline_fallback=False)
+    if name == "wav2vec2_base":
+        from audiocaptcha_dsp.asr import Wav2Vec2Adapter
+
+        return Wav2Vec2Adapter()
+    raise ValueError(f"unknown ASR engine: {name!r}")
+
+
 def _worker_init(asr_names: list[str], torch_threads: int) -> None:
     os.environ.setdefault("OMP_NUM_THREADS", str(max(1, torch_threads)))
     if torch_threads > 0:
@@ -401,16 +471,8 @@ def _worker_init(asr_names: list[str], torch_threads: int) -> None:
         except Exception:
             pass
     engines: dict[str, Any] = {}
-    if "whisper_tiny" in asr_names:
-        from audiocaptcha_dsp.asr import WhisperAdapter
-
-        engines["whisper_tiny"] = WhisperAdapter(
-            model_size="tiny", offline_fallback=False
-        )
-    if "vosk_small_en" in asr_names:
-        from audiocaptcha_dsp.asr import VoskAdapter
-
-        engines["vosk_small_en"] = VoskAdapter(offline_fallback=False)
+    for name in asr_names:
+        engines[name] = _make_engine(name)
     for e in engines.values():
         e.load()
     _G["engines"] = engines
@@ -508,6 +570,31 @@ def _load_done_keys(rows_path: Path) -> set[tuple[str, str]]:
     return done
 
 
+def _check_engine_set(rows_path: Path, engines: list[str]) -> None:
+    """Refuse to resume a run produced by a *different* engine set.
+
+    ``rows.csv`` accumulates one row per (condition, utterance); the headline
+    cross-ΔWER is a macro-average over the evaluated ASR families.  Mixing rows
+    from two engine sets in one file would silently change that definition
+    half-way through the table, so a mismatch stops the run instead.
+    """
+    if not rows_path.exists() or rows_path.stat().st_size == 0:
+        return
+    produced: set[str] = set()
+    with rows_path.open(newline="", encoding="utf-8") as fh:
+        for r in csv.DictReader(fh):
+            for eid in ASR_LABELS:
+                if r.get(f"wer_{eid}", "").strip():
+                    produced.add(eid)
+    if produced != set(engines):
+        raise RuntimeError(
+            f"{rows_path} holds rows for engines {sorted(produced)} but this "
+            f"run requests {sorted(engines)}; cross-ΔWER must be computed "
+            "from one engine set. Move rows.csv aside (or choose a fresh "
+            "--out) to start a clean run."
+        )
+
+
 # --------------------------------------------------------------------------
 # Orchestration
 # --------------------------------------------------------------------------
@@ -528,7 +615,14 @@ def run_benchmark(
     """Run (or resume) the comparative benchmark.  Returns summary.csv path."""
     out_dir = Path(out_dir)
     out_dir.mkdir(parents=True, exist_ok=True)
-    engines = engines if engines is not None else ["whisper_tiny", "vosk_small_en"]
+    engines = list(engines) if engines is not None else list(DEFAULT_ENGINES)
+    unknown = [e for e in engines if e not in ASR_LABELS]
+    if unknown:
+        raise ValueError(
+            f"unknown ASR engine(s) {unknown}; available: {list(ASR_LABELS)}"
+        )
+    rows_path = out_dir / "rows.csv"
+    _check_engine_set(rows_path, engines)  # before any dataset/ASR work
 
     # ---- transforms -----------------------------------------------------
     reg = get_registry()
@@ -561,7 +655,6 @@ def run_benchmark(
     write_run_manifest(out_dir, args_dump, conditions)
 
     # ---- tasks + resume -------------------------------------------------
-    rows_path = out_dir / "rows.csv"
     done = _load_done_keys(rows_path)
     all_tasks = _tasks_for(conditions, samples)
     tasks = [t for t in all_tasks
@@ -628,15 +721,16 @@ def aggregate_results(out_dir: Path, log: Any = print) -> Path:
     if df.empty:
         raise RuntimeError("rows.csv is empty")
 
+    wer_cols = [f"wer_{eid}" for eid in ASR_LABELS]
     num_cols = ["dur_s", "snr_db", "stoi_proxy", "mbsd", "si_sdr_db",
-                "rms_ratio", "wer_whisper_tiny", "wer_vosk_small_en",
-                "margin_db"]
+                "rms_ratio", "margin_db", *wer_cols]
     for c in num_cols:
-        df[c] = pd.to_numeric(df[c].replace("", np.nan), errors="coerce")
+        if c in df.columns:
+            df[c] = pd.to_numeric(df[c].replace("", np.nan), errors="coerce")
     df["ok"] = df["status"] == "ok"
     ok = df[df["ok"]]
 
-    engine_cols = [c for c in ("wer_whisper_tiny", "wer_vosk_small_en")
+    engine_cols = [c for c in wer_cols
                    if c in ok.columns and ok[c].notna().any()]
     baselines = {c: float(ok.loc[ok.condition_id == ORIGINAL_ID, c].mean())
                  for c in engine_cols}
@@ -674,14 +768,14 @@ def aggregate_results(out_dir: Path, log: Any = print) -> Path:
             rec["cross_delta_wer"] = np.nan
             records.append(rec)
             continue
-        deltas: list[float] = []
+        deltas: dict[str, float] = {}
         for c in engine_cols:
             m = g[c].mean()
             d = m - baselines[c]
             rec[f"{c}_mean"] = m
             rec[f"{c}_delta"] = d
-            deltas.append(d)
-        rec["cross_delta_wer"] = float(np.mean(deltas)) if deltas else np.nan
+            deltas[c] = d
+        rec["cross_delta_wer"] = _macro_family_delta(deltas)
 
         # SecurityEvaluator → HSR (illustrative), ASR-SR, HAG, CSS
         if cid != ORIGINAL_ID and np.isfinite(rec["snr_mean"]):
@@ -822,9 +916,17 @@ def _write_ranking_md(
     a("> **Dataset provenance:** `dataset_manifest.json` in this directory "
       "(base-paper subset protocol, Schönherr et al. 2018, arXiv:1808.05665).")
     a(f"> **HSR values are {HSR_LABEL}.**")
-    a("> **ASR engines:** Whisper tiny (attention encoder-decoder) + "
-      "Vosk small-en (Kaldi nnet3 — base-paper toolkit lineage); "
-      "both are real recognizers.")
+    delta_cols = [c for c in summary.columns
+                  if c.startswith("wer_") and c.endswith("_delta")]
+    engine_ids = [c[len("wer_"):-len("_delta")] for c in delta_cols]
+    fam_names = sorted({
+        ASR_LABELS.get(e, {}).get("family", e) for e in engine_ids
+    })
+    a("> **ASR engines:** "
+      + ", ".join(e.replace("_", " ") for e in engine_ids)
+      + f" — {len(fam_names)} independent famil"
+      + ("y" if len(fam_names) == 1 else "ies") + ": "
+      + "; ".join(fam_names) + ". All are real recognizers.")
     a("")
     a(f"Rows: {int(df['ok'].sum())} ok, {int((~df['ok']).sum())} error. "
       f"Baseline WER: " + ", ".join(
@@ -832,23 +934,24 @@ def _write_ranking_md(
     a("")
     a("## Overall ranking (attack = cross-family ΔWER, human = STOI)")
     a("")
-    a("| atk | condition | fam | kind | STOI | ΔWER whisper | ΔWER vosk "
-      "| cross-ΔWER | SNR dB | HSR (ill.) | pareto |")
-    a("|---:|---|:-:|:-:|---:|---:|---:|---:|---:|---:|:-:|")
+    a("| atk | condition | fam | kind | STOI | "
+      + " | ".join(f"ΔWER {e.replace('_', ' ')}" for e in engine_ids)
+      + " | cross-ΔWER | SNR dB | HSR (ill.) | pareto |")
+    a("|---:|---|:-:|:-:|---:|" + "---:|" * len(delta_cols)
+      + "---:|---:|---:|:-:|")
     ranked = summary.sort_values("attack_rank", na_position="last")
     for r in ranked.itertuples():
-        a("| {} | `{}` | {} | {} | {} | {} | {} | {} | {} | {} | {} |".format(
+        a("| " + " | ".join([
             _fmt(r.attack_rank, 0) if np.isfinite(getattr(r, "attack_rank"))
             else "—",
-            r.condition_id, r.family, r.kind,
+            f"`{r.condition_id}`", r.family, r.kind,
             _fmt(r.stoi_mean),
-            _fmt(getattr(r, "wer_whisper_tiny_delta", np.nan)),
-            _fmt(getattr(r, "wer_vosk_small_en_delta", np.nan)),
+            *(_fmt(getattr(r, c, np.nan)) for c in delta_cols),
             _fmt(r.cross_delta_wer),
             _fmt(r.snr_mean, 1),
             _fmt(getattr(r, "hsr", np.nan)),
             "★" if getattr(r, "pareto", False) else "",
-        ))
+        ]) + " |")
     a("")
     a("## Human-intelligibility view (top 15 by STOI)")
     a("")
@@ -897,19 +1000,23 @@ def _write_ranking_md(
             ctrl = summary[summary.condition_id == CONTROL_ID]
             a(f"### `{key}`")
             a("")
-            a("| λ (dB) | STOI | ΔWER whisper | ΔWER vosk | cross-ΔWER | SNR dB |")
-            a("|---:|---:|---:|---:|---:|---:|")
+            a("| λ (dB) | STOI | "
+              + " | ".join(f"ΔWER {e.replace('_', ' ')}" for e in engine_ids)
+              + " | cross-ΔWER | SNR dB |")
+            a("|---:|---:|" + "---:|" * len(delta_cols) + "---:|---:|")
             for r in sub.itertuples():
-                a(f"| {r.margin_db:g} | {_fmt(r.stoi_mean)} "
-                  f"| {_fmt(getattr(r, 'wer_whisper_tiny_delta', np.nan))} "
-                  f"| {_fmt(getattr(r, 'wer_vosk_small_en_delta', np.nan))} "
-                  f"| {_fmt(r.cross_delta_wer)} | {_fmt(r.snr_mean, 1)} |")
+                a("| " + " | ".join([
+                    f"{r.margin_db:g}", _fmt(r.stoi_mean),
+                    *(_fmt(getattr(r, c, np.nan)) for c in delta_cols),
+                    _fmt(r.cross_delta_wer), _fmt(r.snr_mean, 1),
+                ]) + " |")
             if not ctrl.empty:
                 r = ctrl.iloc[0]
-                a(f"| None | {_fmt(r.stoi_mean)} "
-                  f"| {_fmt(r.get('wer_whisper_tiny_delta', np.nan))} "
-                  f"| {_fmt(r.get('wer_vosk_small_en_delta', np.nan))} "
-                  f"| {_fmt(r.cross_delta_wer)} | {_fmt(r.snr_mean, 1)} |")
+                a("| " + " | ".join([
+                    "None", _fmt(r.stoi_mean),
+                    *(_fmt(r.get(c, np.nan)) for c in delta_cols),
+                    _fmt(r.cross_delta_wer), _fmt(r.snr_mean, 1),
+                ]) + " |")
             a("")
 
     # ---- family summary ------------------------------------------------

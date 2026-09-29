@@ -38,8 +38,10 @@ LATEX_COLS = {
     "stoi_mean": ("STOI$\\uparrow$", "r"),
     "mean_stoi": ("mean STOI", "r"),
     "snr_mean": ("SNR (dB)", "r"),
-    "wer_whisper_tiny_delta": ("$\\Delta$WER Whisper", "r"),
+    "wer_whisper_tiny_delta": ("$\\Delta$WER Whisper tiny", "r"),
+    "wer_whisper_small_delta": ("$\\Delta$WER Whisper small", "r"),
     "wer_vosk_small_en_delta": ("$\\Delta$WER Vosk", "r"),
+    "wer_wav2vec2_base_delta": ("$\\Delta$WER wav2vec2", "r"),
     "cross_delta_wer": ("cross-$\\Delta$WER $\\uparrow$", "r"),
     "mean_cross_delta_wer": ("mean cross-$\\Delta$WER", "r"),
     "std_cross_delta_wer": ("SD cross-$\\Delta$WER", "r"),
@@ -135,15 +137,17 @@ def main(argv: list[str] | None = None) -> int:
     )
 
     # 2/3. top-10 views
+    delta_cols = [c for c in df.columns
+                  if c.startswith("wer_") and c.endswith("_delta")]
     ranked = df[df.kind != "original"]
     if ranked["attack_rank"].notna().any():
         top_a = ranked.nsmallest(10, "attack_rank")
         _emit(top_a, "top10_attack",
               "Ten strongest attacks (mean cross-family $\\Delta$WER over "
-              f"Whisper tiny and Vosk). {HSR_NOTE}", "tab:top10_attack",
+              f"the evaluated ASR engines). {HSR_NOTE}", "tab:top10_attack",
               cols=[c for c in (
                   "attack_rank", "condition_id", "family",
-                  "wer_whisper_tiny_delta", "wer_vosk_small_en_delta",
+                  *delta_cols,
                   "cross_delta_wer", "stoi_mean", "hsr", "pareto",
               ) if c in df.columns])
     top_h = ranked.nsmallest(10, "human_rank")
@@ -166,29 +170,25 @@ def main(argv: list[str] | None = None) -> int:
                 rows.append({
                     "transform_key": key, "margin_db": r.margin_db,
                     "stoi_mean": r.stoi_mean,
-                    "wer_whisper_tiny_delta": r.get(
-                        "wer_whisper_tiny_delta"),
-                    "wer_vosk_small_en_delta": r.get(
-                        "wer_vosk_small_en_delta"),
+                    **{c: r.get(c) for c in delta_cols},
                     "cross_delta_wer": r.cross_delta_wer,
                     "snr_mean": r.snr_mean,
                 })
             if not control.empty:
-                c = control.iloc[0]
+                ctrl = control.iloc[0]
                 rows.append({
                     "transform_key": key, "margin_db": "None",
-                    "stoi_mean": c.stoi_mean,
-                    "wer_whisper_tiny_delta": c.get(
-                        "wer_whisper_tiny_delta"),
-                    "wer_vosk_small_en_delta": c.get(
-                        "wer_vosk_small_en_delta"),
-                    "cross_delta_wer": c.cross_delta_wer,
-                    "snr_mean": c.snr_mean,
+                    "stoi_mean": ctrl.stoi_mean,
+                    **{col: ctrl.get(col) for col in delta_cols},
+                    "cross_delta_wer": ctrl.cross_delta_wer,
+                    "snr_mean": ctrl.snr_mean,
                 })
         sw = pd.DataFrame(rows)
-        tex_cols = ["transform_key", "margin_db", "stoi_mean",
-                    "wer_whisper_tiny_delta", "wer_vosk_small_en_delta",
-                    "cross_delta_wer", "snr_mean"]
+        tex_cols = [c for c in (
+            "transform_key", "margin_db", "stoi_mean",
+            *delta_cols,
+            "cross_delta_wer", "snr_mean",
+        ) if c in LATEX_COLS]
         cap = ("Hearing-threshold margin sweep ($\\lambda$ grid of the base "
                "paper) including the unconstrained ``None'' control "
                f"(power-matched to $\\lambda$=0). {HSR_NOTE}")

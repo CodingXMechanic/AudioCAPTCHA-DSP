@@ -85,6 +85,24 @@ plt.rcParams.update({
 })
 
 
+def _macro_delta(delta_by_engine: dict[str, float]) -> float:
+    """Family-macro mean over engines — the headline cross-ΔWER rule.
+
+    Mirrors ``experiments.comparative._macro_family_delta``: engines of one
+    lineage (Whisper tiny + small) are averaged first, then the family
+    means, so each independent ASR family weighs exactly once.
+    """
+    from audiocaptcha_dsp.experiments.comparative import asr_family_groups
+
+    if not delta_by_engine:
+        return float("nan")
+    family_means = [
+        np.nanmean([delta_by_engine[e] for e in members])
+        for members in asr_family_groups(list(delta_by_engine)).values()
+    ]
+    return float(np.nanmean(family_means))
+
+
 def _save(fig: plt.Figure, out: Path, name: str) -> list[Path]:
     paths = []
     for ext in ("png", "svg", "pdf"):
@@ -151,7 +169,7 @@ def fig_pareto(df: pd.DataFrame, out: Path, meta: dict) -> list[Path]:
     ax.set_title(
         "Human intelligibility vs. ASR effectiveness\n"
         f"{meta.get('protocol', '')} — {meta.get('n', 0)} samples\n"
-        "Whisper tiny + Vosk (independent families)"
+        f"{meta.get('engines', 'registered engines')}"
     )
     ax.legend(loc="lower left", fontsize=7.5, ncol=2,
               framealpha=0.85, edgecolor="white")
@@ -311,7 +329,7 @@ def _footer(fig: plt.Figure, meta: dict, extra: str = "") -> None:
         bits.append(f"n={meta['n']}")
     if meta.get("corpus"):
         bits.append(f"corpus: {meta['corpus']}")
-    bits.append(f"engines: {meta.get('engines', 'whisper-tiny + vosk')}")
+    bits.append(f"engines: {meta.get('engines', 'registered engines')}")
     if meta.get("seed") is not None:
         bits.append(f"seed={meta['seed']}")
     if extra:
@@ -413,7 +431,7 @@ def fig_strength_curves(rows: pd.DataFrame | None, out: Path,
         axes[0].plot(sub.index, sub.wer, marker="o", ms=4, label=lbl)
         axes[1].plot(sub.index, sub.hsr, marker="o", ms=4, label=lbl)
         axes[2].plot(sub.index, sub.gap, marker="o", ms=4, label=lbl)
-    axes[0].set_ylabel("mean WER (both engines)")
+    axes[0].set_ylabel("mean WER (all engines pooled)")
     axes[0].set_title("(a) WER vs transformation strength")
     axes[1].set_ylabel("human success (STOI proxy)")
     axes[1].set_ylim(0, 1.05)
@@ -637,7 +655,7 @@ def fig_word_confusion(rows: pd.DataFrame | None, out: Path,
     fig.colorbar(im, ax=ax, fraction=0.046, pad=0.04, label="count")
     fig.tight_layout()
     _footer(fig, meta, f"alignment: SequenceMatcher | pairs={int(mat.sum())} | "
-                       "attacked conditions only, both engines pooled")
+                       "attacked conditions only, all engines pooled")
     return _save(fig, out, "fig10_word_confusion")
 
 
@@ -773,16 +791,19 @@ def fig_metric_correlation(df: pd.DataFrame, out: Path,
     """fig13 — correlation matrix of headline metrics across conditions."""
     wanted = [c for c in (
         "stoi_mean", "mbsd_mean", "snr_mean", "si_sdr_mean",
-        "cross_delta_wer", "wer_whisper_tiny_delta", "wer_vosk_small_en_delta",
-        "margin_db", "dur_mean",
+        "cross_delta_wer", "margin_db", "dur_mean",
     ) if c in df.columns]
+    wanted += [c for c in df.columns
+               if c.startswith("wer_") and c.endswith("_delta")
+               and c not in wanted]
     if len(wanted) < 3:
         return []
     sub = df[df.kind != "original"][wanted].apply(pd.to_numeric, errors="coerce")
     corr = sub.corr()
     if corr.isna().all().all():
         return []
-    fig, ax = plt.subplots(figsize=(6.8, 5.6))
+    side = max(6.8, 0.85 * len(wanted) + 1.5)
+    fig, ax = plt.subplots(figsize=(side, max(5.6, 0.75 * len(wanted) + 1.5)))
     im = ax.imshow(corr.to_numpy(dtype=float), cmap="coolwarm", vmin=-1,
                    vmax=1, aspect="auto")
     labels = [c.replace("_mean", "").replace("_delta", " Δ").replace("wer_", "WER ")
@@ -818,18 +839,23 @@ def fig_forest(rows: pd.DataFrame | None, out: Path,
     ok = rows[(rows.kind != "original") & (rows.status == "ok")]
     if orig.empty or ok.empty:
         return []
-    base = {u: np.nanmean([
-        pd.to_numeric(r.get(f"wer_{e}"), errors="coerce") for e in engines])
-        for u, r in orig.set_index("utt_id").iterrows()}
+    base = {u: {e: pd.to_numeric(r.get(f"wer_{e}"), errors="coerce")
+                for e in engines}
+            for u, r in orig.set_index("utt_id").iterrows()}
 
     def _delta(r: pd.Series) -> float:
-        b = base.get(r.utt_id, np.nan)
-        vals = [pd.to_numeric(r.get(f"wer_{e}"), errors="coerce")
-                for e in engines]
-        vals = [v for v in vals if np.isfinite(v)]
-        if not vals or not np.isfinite(b):
+        b = base.get(r.utt_id)
+        if b is None:
             return np.nan
-        return float(np.mean(vals) - b)
+        per_engine: dict[str, float] = {}
+        for e in engines:
+            v = pd.to_numeric(r.get(f"wer_{e}"), errors="coerce")
+            bv = b.get(e, np.nan)
+            if np.isfinite(v) and np.isfinite(bv):
+                per_engine[e] = float(v - bv)
+        if not per_engine:
+            return np.nan
+        return _macro_delta(per_engine)
 
     ok = ok.copy()
     ok["delta"] = ok.apply(_delta, axis=1)
@@ -865,7 +891,7 @@ def fig_forest(rows: pd.DataFrame | None, out: Path,
     ax.set_xlabel("effect size: ΔWER vs original ± 95% CI")
     ax.set_title("Forest plot: attack effect sizes (top conditions)")
     fig.tight_layout()
-    _footer(fig, meta, "per-utterance ΔWER (both engines pooled) | "
+    _footer(fig, meta, "per-utterance ΔWER (family-macro over engines) | "
                        "95% CI: normal approx over utterances")
     return _save(fig, out, "fig14_forest_effect_sizes")
 
@@ -897,24 +923,29 @@ def fig_rank_stability(rows: pd.DataFrame | None, out: Path, meta: dict,
     ok = rows[(rows.kind != "original") & (rows.status == "ok")]
     if orig.empty or ok.empty:
         return []
-    base = {u: np.nanmean([
-        pd.to_numeric(r.get(f"wer_{e}"), errors="coerce") for e in engines])
-        for u, r in orig.set_index("utt_id").iterrows()}
+    base = {u: {e: pd.to_numeric(r.get(f"wer_{e}"), errors="coerce")
+                for e in engines}
+            for u, r in orig.set_index("utt_id").iterrows()}
     utts = sorted(set(ok.utt_id) & set(base))
     if len(utts) < 10:
         return []
 
-    # (condition, utt) → delta
+    # (condition, utt) → delta (family-macro over engines, as in summary)
     deltas: dict[str, dict[str, float]] = {}
     for _, r in ok.iterrows():
-        b = base.get(r.utt_id, np.nan)
-        vals = [pd.to_numeric(r.get(f"wer_{e}"), errors="coerce")
-                for e in engines]
-        vals = [v for v in vals if np.isfinite(v)]
-        if not vals or not np.isfinite(b):
+        b = base.get(r.utt_id)
+        if b is None:
             continue
-        deltas.setdefault(r.condition_id, {})[r.utt_id] = float(
-            np.mean(vals) - b)
+        per_engine: dict[str, float] = {}
+        for e in engines:
+            v = pd.to_numeric(r.get(f"wer_{e}"), errors="coerce")
+            bv = b.get(e, np.nan)
+            if np.isfinite(v) and np.isfinite(bv):
+                per_engine[e] = float(v - bv)
+        if per_engine:
+            deltas.setdefault(r.condition_id, {})[r.utt_id] = _macro_delta(
+                per_engine
+            )
     conds = [c for c, d in deltas.items() if len(d) >= 0.8 * len(utts)]
     if len(conds) < 5:
         return []
@@ -1087,7 +1118,7 @@ def main(argv: list[str] | None = None) -> int:
     df["pareto"] = df["pareto"].fillna(False)
 
     meta: dict = {"protocol": "", "n": 0, "corpus": "", "seed": None,
-                  "engines": "whisper-tiny + vosk"}
+                  "engines": "registered engines"}
     import json
     manifest = args.run / "dataset_manifest.json"
     if manifest.exists():

@@ -4,7 +4,8 @@
 Examples
 --------
 # Headline run: base-paper subset A protocol on the public stand-in corpus,
-# curated transform set, λ-sweep mirror, Whisper + Vosk:
+# curated transform set, λ-sweep mirror, Whisper (tiny + small) + Vosk +
+# wav2vec 2.0:
 python scripts/run_comparative_benchmark.py --out results/comparative/main
 
 # Full catalog (all 119 transforms), resumable - rerun to continue:
@@ -42,26 +43,36 @@ def main(argv: list[str] | None = None) -> int:
                    help="'curated', 'all', or comma-separated registry keys")
     p.add_argument("--no-sweep", action="store_true",
                    help="disable the λ-sweep mirror + control condition")
-    p.add_argument("--asr", default="whisper_tiny,vosk_small_en",
-                   help="comma-separated engines, or 'none'")
+    p.add_argument("--asr", default=None,
+                   help="comma-separated engine ids (see ASR_MODELS.md), or "
+                        "'none' for a DSP-only run (default: all "
+                        "registered engines)")
     p.add_argument("--workers", type=int, default=3)
     p.add_argument("--out", type=Path, default=None,
                    help="default: results/comparative/run_<timestamp>")
     args = p.parse_args(argv)
 
-    engines = [] if args.asr.strip().lower() == "none" else [
-        e.strip() for e in args.asr.split(",") if e.strip()
-    ]
+    from audiocaptcha_dsp.experiments.comparative import (
+        ASR_LABELS,
+        DEFAULT_ENGINES,
+        run_benchmark,
+    )
+
+    if args.asr is None:
+        engines = list(DEFAULT_ENGINES)
+    elif args.asr.strip().lower() == "none":
+        engines = []
+    else:
+        engines = [e.strip() for e in args.asr.split(",") if e.strip()]
     for e in engines:
-        if e not in ("whisper_tiny", "vosk_small_en"):
-            p.error(f"unknown engine {e!r} (available: whisper_tiny, vosk_small_en)")
+        if e not in ASR_LABELS:
+            p.error(f"unknown engine {e!r} "
+                    f"(available: {', '.join(ASR_LABELS)})")
 
     out = args.out or Path(
         "results/comparative"
         f"/run_{datetime.now().strftime('%Y%m%d_%H%M%S')}"
     )
-
-    from audiocaptcha_dsp.experiments.comparative import run_benchmark
 
     summary = run_benchmark(
         out_dir=out,

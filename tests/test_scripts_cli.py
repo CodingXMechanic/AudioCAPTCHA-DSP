@@ -26,8 +26,10 @@ ROW_FIELDS = [
     "condition_id", "kind", "transform_key", "family", "params_json",
     "margin_db", "utt_id", "spk", "dur_s", "status", "error",
     "snr_db", "stoi_proxy", "mbsd", "si_sdr_db", "rms_ratio", "ref_text",
-    "wer_whisper_tiny", "wer_vosk_small_en",
-    "hyp_whisper_tiny", "hyp_vosk_small_en",
+    "wer_whisper_tiny", "wer_whisper_small",
+    "wer_vosk_small_en", "wer_wav2vec2_base",
+    "hyp_whisper_tiny", "hyp_whisper_small",
+    "hyp_vosk_small_en", "hyp_wav2vec2_base",
 ]
 
 SHELF_ROW_FIELDS = [
@@ -41,7 +43,9 @@ SUMMARY_COLS = [
     "condition_id", "kind", "transform_key", "family", "margin_db",
     "n_ok", "n_err", "stoi_mean", "stoi_std", "snr_mean", "mbsd_mean",
     "si_sdr_mean", "wer_whisper_tiny_mean", "wer_whisper_tiny_delta",
+    "wer_whisper_small_mean", "wer_whisper_small_delta",
     "wer_vosk_small_en_mean", "wer_vosk_small_en_delta",
+    "wer_wav2vec2_base_mean", "wer_wav2vec2_base_delta",
     "cross_delta_wer", "hsr", "asr_sr", "hag", "css",
     "human_rank", "attack_rank", "gap_rank", "quality_rank",
     "pareto", "hsr_label",
@@ -84,10 +88,16 @@ def _make_run(run_dir: Path, n_utt: int = 12) -> Path:
                 np.clip(0.94 - 0.05 * (ci % 4), 0.5, 1.0))
             w_w = 0.06 + (strength if kind != "original" else 0) + \
                 0.01 * rng.standard_normal()
+            w_s = 0.04 + (0.5 * strength if kind != "original" else 0) + \
+                0.01 * rng.standard_normal()
             w_v = 0.13 + (0.8 * strength if kind != "original" else 0) + \
                 0.02 * rng.standard_normal()
+            w_x = 0.05 + (0.7 * strength if kind != "original" else 0) + \
+                0.01 * rng.standard_normal()
             hyp_w = "hello world" if w_w < 0.1 else "hallo word"
+            hyp_s = "hello world" if w_s < 0.1 else "hallo word"
             hyp_v = "hello world" if w_v < 0.15 else "help world"
+            hyp_x = "HELLO WORLD" if w_x < 0.1 else "HALLO WORD"
             rows.append({
                 "condition_id": cid, "kind": kind, "transform_key": key,
                 "family": fam, "params_json": "{}", "margin_db": mb,
@@ -98,8 +108,11 @@ def _make_run(run_dir: Path, n_utt: int = 12) -> Path:
                 "si_sdr_db": "15", "rms_ratio": "1.0",
                 "ref_text": "hello world",
                 "wer_whisper_tiny": f"{max(w_w, 0.0):.3f}",
+                "wer_whisper_small": f"{max(w_s, 0.0):.3f}",
                 "wer_vosk_small_en": f"{max(w_v, 0.0):.3f}",
-                "hyp_whisper_tiny": hyp_w, "hyp_vosk_small_en": hyp_v,
+                "wer_wav2vec2_base": f"{max(w_x, 0.0):.3f}",
+                "hyp_whisper_tiny": hyp_w, "hyp_whisper_small": hyp_s,
+                "hyp_vosk_small_en": hyp_v, "hyp_wav2vec2_base": hyp_x,
             })
     with (run_dir / "rows.csv").open("w", newline="", encoding="utf-8") as fh:
         w = csv.DictWriter(fh, fieldnames=ROW_FIELDS)
@@ -121,15 +134,22 @@ def _make_run(run_dir: Path, n_utt: int = 12) -> Path:
     for cid, kind, key, fam, mb in conds:
         sub = [r for r in rows if r["condition_id"] == cid]
         w_w = _np.array([float(r["wer_whisper_tiny"]) for r in sub])
+        w_s = _np.array([float(r["wer_whisper_small"]) for r in sub])
         w_v = _np.array([float(r["wer_vosk_small_en"]) for r in sub])
+        w_x = _np.array([float(r["wer_wav2vec2_base"]) for r in sub])
         st = _np.array([float(r["stoi_proxy"]) for r in sub])
-        base_w = _np.array([float(r["wer_whisper_tiny"])
-                            for r in rows if r["condition_id"] == "original"])
-        base_v = _np.array([float(r["wer_vosk_small_en"])
-                            for r in rows if r["condition_id"] == "original"])
+        orig = [r for r in rows if r["condition_id"] == "original"]
+        base_w = _np.array([float(r["wer_whisper_tiny"]) for r in orig])
+        base_s = _np.array([float(r["wer_whisper_small"]) for r in orig])
+        base_v = _np.array([float(r["wer_vosk_small_en"]) for r in orig])
+        base_x = _np.array([float(r["wer_wav2vec2_base"]) for r in orig])
         d_w = float(w_w.mean() - base_w.mean())
+        d_s = float(w_s.mean() - base_s.mean())
         d_v = float(w_v.mean() - base_v.mean())
-        cross = (d_w + d_v) / 2
+        d_x = float(w_x.mean() - base_x.mean())
+        # headline metric: macro-average over ASR families (whisper, kaldi,
+        # ssl) — matches comparative.aggregate_results
+        cross = ((d_w + d_s) / 2 + d_v + d_x) / 3
         srows.append({
             "condition_id": cid, "kind": kind, "transform_key": key,
             "family": fam, "margin_db": mb, "n_ok": len(sub), "n_err": 0,
@@ -138,8 +158,12 @@ def _make_run(run_dir: Path, n_utt: int = 12) -> Path:
             "si_sdr_mean": "15",
             "wer_whisper_tiny_mean": f"{w_w.mean():.3f}",
             "wer_whisper_tiny_delta": f"{d_w:.3f}",
+            "wer_whisper_small_mean": f"{w_s.mean():.3f}",
+            "wer_whisper_small_delta": f"{d_s:.3f}",
             "wer_vosk_small_en_mean": f"{w_v.mean():.3f}",
             "wer_vosk_small_en_delta": f"{d_v:.3f}",
+            "wer_wav2vec2_base_mean": f"{w_x.mean():.3f}",
+            "wer_wav2vec2_base_delta": f"{d_x:.3f}",
             "cross_delta_wer": f"{cross:.3f}",
             "hsr": f"{min(0.6 + 0.4 * st.mean(), 1.0):.3f}",
             "asr_sr": "0.8", "hag": "0.1", "css": "0.5",
@@ -171,7 +195,10 @@ def _make_run(run_dir: Path, n_utt: int = 12) -> Path:
     }), encoding="utf-8")
     (run_dir / "run_manifest.json").write_text(json.dumps({
         "script": "test_fixture",
-        "args": {"seed": 42, "engines": ["whisper_tiny", "vosk_small_en"]},
+        "args": {"seed": 42, "engines": [
+            "whisper_tiny", "whisper_small", "vosk_small_en",
+            "wav2vec2_base",
+        ]},
         "created": "2026-01-01",
     }), encoding="utf-8")
     return run_dir
@@ -291,6 +318,12 @@ def test_make_tables_cli(tmp_path: Path) -> None:
         assert (out / f"{name}.csv").exists(), f"missing {name}.csv"
         tex = (out / f"{name}.tex").read_text(encoding="utf-8")
         assert "\\begin{table*}" in tex and "illustrative" in tex
+    # every registered engine's ΔWER column reaches the paper tables
+    top_tex = (out / "top10_attack.tex").read_text(encoding="utf-8")
+    for label in ("Whisper tiny", "Whisper small", "Vosk", "wav2vec2"):
+        assert label in top_tex, f"{label} column missing from top10_attack.tex"
+    sweep_tex = (out / "lambda_sweep.tex").read_text(encoding="utf-8")
+    assert "Whisper small" in sweep_tex and "wav2vec2" in sweep_tex
 
 
 def test_shelf_life_analysis_cli(tmp_path: Path) -> None:
