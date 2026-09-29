@@ -28,6 +28,11 @@ dev = [
     "pytest>=7.4",
     "pytest-cov>=4.1",
 ]
+# wav2vec 2.0 adapter (the benchmark's self-supervised family):
+#   pip install -e ".[ssl]"
+ssl = [
+    "transformers>=4.40",
+]
 
 [project.scripts]
 audiocaptcha = "audiocaptcha_dsp.cli:main"

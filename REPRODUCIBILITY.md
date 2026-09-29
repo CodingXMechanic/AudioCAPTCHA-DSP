@@ -10,6 +10,7 @@ How to obtain exactly what this repository produced, and how to prove it.
 python -m venv .venv
 .venv\Scripts\activate
 pip install -e ".[dev]"        # incl. vosk>=0.3.45, openai-whisper, jiwer, pandas
+pip install -e ".[dev,ssl]"    # + wav2vec2 adapter (optional `ssl` extra)
 ```
 
 - Determinism: run seed default **42** (`--seed`), propagated into every
@@ -18,6 +19,9 @@ pip install -e ".[dev]"        # incl. vosk>=0.3.45, openai-whisper, jiwer, pand
 - Whisper: `temperature=0`, `fp16=False` (CPU) → deterministic decoding.
 - Vosk: deterministic lattice decoding; model pinned by directory name
   `vosk-model-small-en-us-0.15`.
+- wav2vec2: greedy CTC decoding (no sampling) → deterministic; model pinned
+  by hub id `facebook/wav2vec2-base-960h`, cached under
+  `~/.cache/huggingface`.
 
 ## 2. Exact commands
 

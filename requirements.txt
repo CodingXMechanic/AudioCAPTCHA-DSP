@@ -9,3 +9,5 @@ pandas>=2.0
 pyyaml>=6.0
 soundfile>=0.12
 tqdm>=4.65
+# Optional self-supervised ASR engine (wav2vec2 adapter):
+#   pip install "transformers>=4.40"      # or: pip install -e ".[ssl]"

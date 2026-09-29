@@ -15,7 +15,8 @@ jobs:
   # ---------------------------------------------------------------------------
   # Lightweight unit suite (WHAT-REMAINS §13):
   # runs WITHOUT downloading large models or datasets — tests that need
-  # Whisper weights / the Vosk model / LibriSpeech skip themselves.
+  # Whisper weights / the Vosk model / wav2vec2 weights / LibriSpeech skip
+  # themselves.
   # ---------------------------------------------------------------------------
   unit:
     name: unit (no models, no datasets)
@@ -33,7 +34,9 @@ jobs:
 
   # ---------------------------------------------------------------------------
   # Full suite (manual dispatch): additionally downloads the small ASR models
-  # (Whisper tiny ~40 MB, Vosk small-en ~40 MB) so ASR adapter tests execute.
+  # (Whisper tiny ~40 MB, Vosk small-en ~40 MB, wav2vec2-base ~360 MB) so ASR
+  # adapter tests execute. Whisper small (~1.4 GB) is only needed by the
+  # benchmark itself, not by any test, so CI does not fetch it.
   # LibriSpeech is intentionally not fetched (LDC-scale corpora are documented
   # in DATASETS.md / REPRODUCIBILITY.md instead).
   # ---------------------------------------------------------------------------
@@ -52,12 +55,18 @@ jobs:
         with:
           path: |
             ~/.cache/whisper
+            ~/.cache/huggingface
             data/raw/vosk
-          key: asr-weights-v1
+          key: asr-weights-v2
       - name: Install package
-        run: pip install -e ".[dev]"
+        run: pip install -e ".[dev,ssl]"
       - name: Fetch Whisper tiny weights
         run: python -c "import whisper; whisper.load_model('tiny')"
+      - name: Fetch wav2vec2 weights
+        run: >-
+          python -c "from transformers import Wav2Vec2ForCTC, Wav2Vec2Processor;
+          Wav2Vec2Processor.from_pretrained('facebook/wav2vec2-base-960h');
+          Wav2Vec2ForCTC.from_pretrained('facebook/wav2vec2-base-960h')"
       - name: Fetch Vosk small-en model
         run: |
           python - <<'EOF'

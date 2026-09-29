@@ -1,7 +1,7 @@
 # ASR Models
 
 Evaluation engines for the ASR axis. The core design goal versus the base
-paper (single white-box Kaldi DNN-HMM) is **two genuinely independent
+paper (single white-box Kaldi DNN-HMM) is **three genuinely independent
 families**, so that "attack success" means *black-box transfer*, not
 overfitting to one recognizer.
 
@@ -11,34 +11,54 @@ overfitting to one recognizer.
 
 | Engine id | Model | Family / lineage | Type | Weights |
 |---|---|---|---|---|
-| `whisper_tiny` | openai-whisper **tiny** | Attention encoder-decoder (encoder-decoder Transformers) | **real** | `~/.cache/whisper/tiny.pt` (auto-download) |
+| `whisper_tiny` | openai-whisper **tiny** (39 M) | Attention encoder-decoder | **real** | `~/.cache/whisper/tiny.pt` (auto-download) |
+| `whisper_small` | openai-whisper **small** (244 M) | Attention encoder-decoder (same family as tiny, larger scale point) | **real** | `~/.cache/whisper/small.pt` (auto-download) |
 | `vosk_small_en` | **vosk-model-small-en-us-0.15** (~40 MB) | **Kaldi nnet3** — same toolkit lineage as the base paper's WSJ-recipe DNN-HMM | **real** | `data/raw/vosk/vosk-model-small-en-us-0.15` |
+| `wav2vec2_base` | **facebook/wav2vec2-base-960h** (95 M) | **Self-supervised** (wav2vec 2.0) encoder + CTC head — the family of the SSL papers in the survey | **real** | `~/.cache/huggingface/hub/models--facebook--wav2vec2-base-960h` (via the optional `ssl` extra: `pip install -e ".[ssl]"`) |
 
-Both engines:
+All engines:
 
 - transcribe any `Signal` (mono conversion + resample to 16 kHz inside the
   adapter — 44.1 kHz inputs verified);
 - run deterministically (Whisper `temperature=0`, `fp16=False` on CPU;
-  Vosk lattice decoding is deterministic);
+  Vosk lattice decoding is deterministic; wav2vec2 uses greedy CTC decoding);
 - are **loaded once per worker** and reused (`_worker_init` in
-  `experiments/comparative.py`).
+  `experiments/comparative.py`);
+- fail loudly: `offline_fallback=False` for Whisper/Vosk and an explicit
+  `RuntimeError` in the wav2vec2 adapter mean a missing weight aborts the
+  run — never a silent heuristic fallback.
 
 ### Why Vosk specifically
 
 The base paper's ASR was the default Kaldi WSJ recipe. Vosk's small English
 model is Kaldi-lineage (nnet3 + lattice decoding), i.e. a *modern relative of
 the paper's own recognizer*. Cross-family results therefore read as
-"attention-based ↔ Kaldi-lineage" transfer, which brackets the paper's setup
-from both sides.
+"attention-based ↔ Kaldi-lineage ↔ self-supervised" transfer, which brackets
+the paper's setup from both sides.
+
+### Why wav2vec2
+
+The survey's self-supervised papers (Wav2Vec2/BYOL-A/HuBERT lineage) were
+cited but never evaluated — the one-sidedness `LIMITATIONS.md` flagged. Adding
+wav2vec2-base turns the comparison into a three-family design: a
+supervised attention model, a Kaldi-lineage hybrid, and an SSL model whose
+pretraining objective never saw transcripts. Whisper tiny **and** small
+provide the within-family scale point (244 M vs 39 M) so robustness gains
+from capacity are visible instead of confounded with architecture.
 
 ### Headline metric
 
 ```
-cross_delta_wer = mean over engines of ( WER(condition) − WER(original) )
+family_delta(f) = mean over engines f of ( WER(condition) − WER(original) )
+cross_delta_wer = mean over families f of family_delta(f)
 ```
 
-An attack that fools only one family scores roughly half of one that fools
-both — this is the `attack_rank` ordering key.
+Families: `whisper` (tiny + small), `kaldi` (vosk), `ssl` (wav2vec2). Each
+lineage therefore weighs exactly once — an attack that fools only Whisper at
+both sizes cannot outrank one that hurts all three families. This is the
+`attack_rank` ordering key (`_macro_family_delta` /
+`asr_family_groups` in `experiments/comparative.py`; `scripts/make_figures.py`
+mirrors the same rule for per-utterance deltas).
 
 ---
 
@@ -48,8 +68,8 @@ both — this is the `attack_rank` ordering key.
 |---|---|---|
 | `IndependentASREngine` (`asr/engine.py`) | **Heuristic, metadata-driven** — WER is a function of `signal.metadata`, audio content is never recognized | Tagged `asr_kind: heuristic_proxy` in manifests; **excluded from ΔWER/headline claims**; retained only as a deterministic plumbing test double |
 | `MockASREngine` | Test double | Tests/CI only |
-| Whisper `base`/`small` | Same family, larger | *Not present in this environment* (only tiny weights cached); a size-scaling study would be same-family, not independent |
-| SSL models (wav2vec 2.0 / HuBERT — papers 19–21) | Independent family | **Not supported here** (`transformers` not installed); documented in `LIMITATIONS.md` |
+| Whisper `base` | Same family as tiny/small | Used only as the shelf-life capacity-ladder middle rung (`experiments/shelf_life.py`), not in the headline benchmark |
+| HuBERT / WavLM / wav2vec2-large | Same SSL family at other scales | **Not evaluated** — documented residual in `LIMITATIONS.md` (`wav2vec2-base` carries the SSL family in the headline) |
 | Kaldi DNN-HMM (exact paper model) | The paper's white-box ASR | Requires WSJ training recipe + corpus; Vosk stands in as the Kaldi-lineage family (`scripts/prepare_wsj.py --build-kaldi` unlocks the exact path) |
 
 ## 3. Defenses (evaluated preprocessors, not ASR engines)
@@ -77,10 +97,15 @@ class MyAdapter(ASREngine):
     def transcribe(self, signal: Signal) -> TranscriptionResult: ...
 ```
 
-Register in `comparative._worker_init` + `ROW_FIELDS` (`wer_<id>`,
-`hyp_<id>` columns) and add an honest label to `ASR_LABELS`. Required:
+Register the adapter in `asr/__init__.py`, then add its id to `ASR_LABELS`
+(family label + `group` for the macro-average) and to the `_make_engine`
+factory in `comparative.py`; `ROW_FIELDS` (`wer_<id>` / `hyp_<id>` columns)
+and the default engine list are derived from that single registry. Required:
 `kind: real` must be earned — the heuristic engine's exclusion rule exists
-because metadata-driven WER must never look like recognition.
+because metadata-driven WER must never look like recognition. Resume safety:
+`rows.csv` produced with one engine set cannot be continued with another
+(`_check_engine_set` refuses the mix rather than silently averaging across
+two definitions of the headline metric).
 
 ## 6. Capacity ladder (shelf-life novelty N11)
 
