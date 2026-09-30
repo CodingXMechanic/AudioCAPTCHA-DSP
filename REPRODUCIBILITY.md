@@ -17,8 +17,12 @@ pip install -e ".[dev,ssl]"    # + wav2vec2 adapter (optional `ssl` extra)
   transform whose `__init__` accepts `seed`; seeds recorded in each
   condition's `params_json`.
 - Whisper: `temperature=0`, `fp16=False` (CPU) → deterministic decoding.
-- Vosk: deterministic lattice decoding; model pinned by directory name
-  `vosk-model-small-en-us-0.15`.
+- Vosk: model pinned by directory name `vosk-model-small-en-us-0.15`.
+  Re-runs under an identical configuration reproduce (A/B check: 0/15
+  differing hypotheses); runs under a *different* worker/engine
+  configuration flip a small share of near-tied lattices on noise-like
+  conditions (106/770 across two full runs, ≤ 1.8 pp condition-level WER;
+  attack ranking unchanged, ρ = 0.964) — see `LIMITATIONS.md` §3.
 - wav2vec2: greedy CTC decoding (no sampling) → deterministic; model pinned
   by hub id `facebook/wav2vec2-base-960h`, cached under
   `~/.cache/huggingface`.
@@ -58,6 +62,7 @@ python scripts/run_comparative_benchmark.py --asr none --max-utterances 2 `
 # ---- artifacts ----
 python scripts/make_figures.py --run results/comparative/main --out results/figures
 python scripts/make_tables.py  --run results/comparative/main --out results/tables
+python scripts/make_tables.py  --run results/comparative/engine_validation --out results/tables/validation
 
 # ---- human-proxy validation vs real listener scores (docs/HUMAN_PROXY_VALIDATION.md) ----
 # data: TMHINT-QI release (InQSS) → data/references/tmhintqi/TMHINTQI/{raw_data.csv,test,train}

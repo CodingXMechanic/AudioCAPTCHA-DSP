@@ -93,9 +93,32 @@ frontier points with HSR ≳ 0.8 and cross-ΔWER ≳ 0.3:
 `novel.captcha_optimal`, `channel.codec_simulation`,
 `psychoacoustic.masked_noise#margin=0`, `channel.packet_jitter`.
 
----
+### 3.5 Four-engine transfer validation (top-K subset)
 
-## 4. Novelty N11 — CAPTCHA shelf-life forecasting
+The top-8 attacks by cross-ΔWER + matched-power control + benign
+`baseline.loudness_normalize` + `original` (11 conditions × 70 utts =
+**770 rows, 0 errors**) were re-evaluated on four engines — adding
+Whisper small and wav2vec2-base (`results/comparative/engine_validation/`,
+tables `results/tables/validation/top10_attack.*`):
+
+- Baselines: Whisper tiny 0.079, Vosk 0.119, Whisper small 0.042,
+  wav2vec2 0.046.
+- **Ordering transfers**: Spearman ρ = 0.964 between the 2-engine and
+  4-engine rankings (10 conditions, p = 7.3 × 10⁻⁶); the #1 attack
+  (`spectral.minimum_phase`) is unchanged (4-engine cross-ΔWER 1.119).
+- **Capacity helps**: Whisper small degrades less than tiny on 8 of 9
+  attack/control conditions (minimum_phase 0.966 vs 2.084).
+- **wav2vec2 is channel-robust**: codec 0.169 / jitter 0.106 vs Vosk
+  0.397 / 0.411, while matching the others on spectral attacks (≈ 0.95).
+- **Benign behaves**: loudness normalization ≈ 0 on every engine
+  (−0.001 … +0.002).
+- **Integrity**: Whisper tiny reproduces the headline bit-exactly
+  (0/770 rows) and the audio pipeline is bit-identical (STOI/SNR to
+  1e-16). Vosk is configuration-sensitive, not random: 106/770
+  hypotheses differ between run configurations (≤ 1.8 pp on
+  `channel.codec_simulation`; 4/11 conditions bit-identical; same-config
+  A/B re-run 0/15) with every conclusion above unchanged
+  (`LIMITATIONS.md` §3).
 
 Capacity ladder (Whisper tiny 39M → base 74M → small 244M, one architecture),
 attacked-WER scaling fit `W(C) = a·C^(−b)` via log-log OLS with paired
@@ -176,11 +199,19 @@ python scripts/run_comparative_benchmark.py --asr none --max-utterances 2 `
     --no-sweep --transforms noise.white --out results/comparative/smoke
 # full benchmark (resumable)
 python scripts/run_comparative_benchmark.py --transforms all --workers 4 --out results/comparative/main
+# 4-engine transfer validation (top-K conditions, resumable)
+python scripts/run_comparative_benchmark.py --workers 3 --no-sweep `
+    --transforms spectral.minimum_phase,novel.captcha_optimal,noise.clicks,`
+spectral.phase_randomization,novel.multi_domain,novel.defense_robust,`
+channel.codec_simulation,channel.packet_jitter,baseline.loudness_normalize `
+    --asr whisper_tiny,vosk_small_en,whisper_small,wav2vec2_base `
+    --out results/comparative/engine_validation
 # shelf-life (N11)
 python scripts/run_shelf_life.py --out results/shelf_life --workers 2
 # artifacts
 python scripts/make_figures.py --run results/comparative/main --out results/figures --shelf-run results/shelf_life
 python scripts/make_tables.py  --run results/comparative/main --out results/tables
+python scripts/make_tables.py  --run results/comparative/engine_validation --out results/tables/validation
 python scripts/generate_catalog.py
 # tests
 python -m pytest tests/ -q
@@ -190,9 +221,13 @@ python -m pytest tests/ -q
 
 - `results/comparative/main/` — rows.csv (10,290 × 21), summary.csv (147 × 29),
   ranking.md, dataset/run manifests, main_run{,_history}.log
+- `results/comparative/engine_validation/` — 4-engine top-K run: rows.csv
+  (770 × 25), summary.csv (11 × 33), ranking.md, dataset/run manifests
 - `results/figures/` — fig1–fig16 × PNG/SVG/PDF with metadata footers
 - `results/tables/` — ranking_full, top10_attack, top10_human, lambda_sweep,
   family_summary (CSV + LaTeX)
+- `results/tables/validation/` — ranking_full, top10_attack, top10_human,
+  family_summary for the 4-engine run (CSV + LaTeX)
 - `results/shelf_life/` — ladder rows, forecasts, report
 - Docs: 13 root documents + `docs/` (see README table); analyses:
   `docs/COMPARATIVE_ANALYSIS.md` (numbers), `PAPER_RESULTS_GUIDE.md` (evidence)

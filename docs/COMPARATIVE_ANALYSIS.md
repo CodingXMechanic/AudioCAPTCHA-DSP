@@ -187,6 +187,45 @@ spearmanr(s.wer_whisper_tiny_delta, s.wer_vosk_small_en_delta)
 
 ---
 
+### 5.1 Four-engine transfer validation (top-K subset)
+
+The eight strongest conditions by cross-ΔWER, the matched-power control,
+a benign condition and `original` (11 × 70 = 770 rows, 0 errors) were
+re-evaluated with two extra engines — Whisper small (capacity) and
+wav2vec2-base (self-supervised). Per-engine ΔWER
+(`results/comparative/engine_validation/summary.csv`; CSV/LaTeX in
+`results/tables/validation/`):
+
+| condition | tiny | small | Vosk | wav2vec2 | cross (4-eng) | STOI |
+|---|---|---|---|---|---|---|
+| spectral.minimum_phase | 2.084 | 0.966 | 0.881 | 0.950 | **1.119** | 0.489 |
+| noise.clicks | 1.027 | 1.026 | 0.879 | 0.954 | 0.953 | 0.535 |
+| spectral.phase_randomization | 0.921 | 0.958 | 0.881 | 0.954 | 0.925 | 0.501 |
+| novel.captcha_optimal | 1.091 | 0.812 | 0.844 | 0.941 | 0.912 | 0.829 |
+| novel.multi_domain | 0.721 | 0.202 | 0.589 | 0.894 | 0.648 | 0.877 |
+| control.no_hearing_threshold | 0.465 | 0.161 | 0.527 | 0.856 | 0.565 | 0.675 |
+| novel.defense_robust | 0.387 | 0.099 | 0.384 | 0.640 | 0.422 | 0.713 |
+| channel.codec_simulation | 0.354 | 0.101 | 0.397 | 0.169 | 0.264 | 0.899 |
+| channel.packet_jitter | 0.245 | 0.070 | 0.411 | 0.106 | 0.225 | 0.797 |
+| original | 0.000 | 0.000 | 0.000 | 0.000 | 0.000 | 1.000 |
+| baseline.loudness_normalize | 0.002 | −0.001 | −0.003 | 0.000 | −0.001 | 1.000 |
+
+Readings:
+
+- The attack ordering is stable across engine sets: Spearman ρ = 0.964
+  (2-engine vs 4-engine ranking, 10 conditions, p = 7.3e-6); the #1
+  condition is unchanged.
+- Scale point: Whisper small is harder to move than tiny (8 of 9 attack
+  conditions), but no engine escapes the top attacks — every engine
+  loses ≥ 0.81 absolute WER on each of the top four conditions.
+- SSL profile: wav2vec2 degrades like the others on spectral/noise
+  attacks but is markedly steadier under channel distortions
+  (codec 0.169, jitter 0.106).
+- Integrity vs the headline: Whisper tiny is bit-exact (0/770) and the
+  audio is bit-identical (STOI/SNR to 1e-16); Vosk differs on 106/770
+  hypotheses across run configurations (≤ 1.8 pp; 4/11 conditions
+  bit-identical; same-config A/B 0/15), which changes no reading above.
+
 ## 6. Designing CAPTCHAs from the frontier
 
 `fig1` (Pareto) shows **13 frontier conditions**:

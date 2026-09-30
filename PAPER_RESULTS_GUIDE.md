@@ -18,6 +18,7 @@ wording rules that keep claims honest. WHAT-REMAINS §15.
 | Formal HAG metric stack | `hsr/asr_sr/hag/css` columns; `evaluation/hag_metrics.py` | Metrics section |
 | Family-level signatures | `tables/family_summary.*`, `fig4_family_summary` | Analysis |
 | Reproducibility standard | `run_manifest.json`, `dataset_manifest.json`, `rows.csv` | Reproducibility statement |
+| Four-engine transfer validation (top-K) | `results/comparative/engine_validation/summary.csv`, `tables/validation/top10_attack.*` | Robustness / appendix table |
 | Gaps vs base paper | `docs/GAP_ANALYSIS.md` (G1–G12) | Related work / contributions |
 | **Shelf-life forecasting (novelty N11)** | `results/shelf_life/shelf_life.{json,md}`, `fig16_shelf_life_forecast`, `rows.csv` (capacity ladder) | New-method + forecasting result |
 

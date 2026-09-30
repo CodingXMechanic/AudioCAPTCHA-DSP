@@ -39,6 +39,15 @@ below is also reflected in the generated outputs' labels.
 - **SSL depth is one model**: `wav2vec2-base` carries the self-supervised
   family in the validation run; HuBERT/WavLM/wav2vec2-large are *not
   evaluated* (stated, not half-implemented).
+- **Vosk cross-run reproducibility**: re-runs with an identical
+  configuration reproduce (0/15 A/B check), but runs under a different
+  worker/engine configuration changed 106/770 1-best hypotheses
+  (max 1.8 pp condition-level WER on `channel.codec_simulation`;
+  4/11 conditions bit-identical; always concentrated in noise-like
+  conditions — leading hypothesis: beam-pruned lattice near-ties
+  sensitive to float/layout noise). Whisper reproduces bit-exactly
+  (0/770) and the attack ordering is unchanged (ρ = 0.964); each run is
+  internally consistent, and headline numbers come from a single run.
 - Exact paper ASR (Kaldi WSJ DNN-HMM) requires WSJ training; Vosk is a
   lineage stand-in, not the same model.
 

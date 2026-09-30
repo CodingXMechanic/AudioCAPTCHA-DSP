@@ -40,12 +40,21 @@ and to an SSL model whose pretraining never saw transcripts?* The full
 147-condition × 4-engine matrix was **not** run (≈ 35 h on this hardware) —
 declared as a limitation, never implied.
 
+Result: `results/comparative/engine_validation/` (770 rows, 0 errors) with
+tables in `results/tables/validation/`; the headline `#1` attack
+(`spectral.minimum_phase`) stays `#1` on four engines (cross-ΔWER 1.119)
+and the ranking agrees with the 2-engine matrix at ρ = 0.964.
+
 All four engines:
 
 - transcribe any `Signal` (mono conversion + resample to 16 kHz inside the
   adapter — 44.1 kHz inputs verified);
-- run deterministically (Whisper `temperature=0`, `fp16=False` on CPU;
-  Vosk lattice decoding is deterministic; wav2vec2 uses greedy CTC decoding);
+- run deterministically for Whisper (`temperature=0`, `fp16=False` on CPU)
+  and wav2vec2 (greedy CTC); Vosk re-runs with an *identical*
+  configuration reproduce (A/B check: 0/15), while runs under a different
+  worker/engine configuration flip a small share of near-tied lattices on
+  noise-like conditions (106/770 hypotheses, ≤ 1.8 pp condition-level
+  WER — `LIMITATIONS.md` §3);
 - are **loaded once per worker** and reused (`_worker_init` in
   `experiments/comparative.py`);
 - fail loudly: `offline_fallback=False` for Whisper/Vosk and an explicit
